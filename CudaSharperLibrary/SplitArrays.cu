@@ -10,7 +10,31 @@ __global__ void copyArrays(int *result, int *input, const unsigned int offset, c
 	}
 }
 
-template<typename T> void splitArray(int device_id, int *src, int *array1, int *array2, const unsigned int array_length, const unsigned int split_index)
+__global__ void copyArrays(long *result, long *input, const unsigned int offset, const unsigned int length)
+{
+	int xid = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (xid < length) {
+		result[xid] = input[xid + offset];
+	}
+}
+
+__global__ void copyArrays(float *result, float *input, const unsigned int offset, const unsigned int length)
+{
+	int xid = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (xid < length) {
+		result[xid] = input[xid + offset];
+	}
+}
+
+__global__ void copyArrays(double *result, double *input, const unsigned int offset, const unsigned int length)
+{
+	int xid = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (xid < length) {
+		result[xid] = input[xid + offset];
+	}
+}
+
+template<typename T> void splitArray(int device_id, T *src, T *array1, T *array2, const unsigned int array_length, const unsigned int split_index)
 {
 	cudaError_t gpu_device = cudaSetDevice(device_id);
 
@@ -53,12 +77,28 @@ template<typename T> void splitArray(int device_id, int *src, int *array1, int *
 	cudaStreamDestroy(stream1);
 	cudaStreamDestroy(stream2);
 
+	cudaFree(d_src);
 	cudaFree(d_array1);
 	cudaFree(d_array2);
 }
 
 extern "C" __declspec(dllexport) void SplitIntArray(int device_id, int *src, int *array1, int *array2, const unsigned int array_length, const unsigned int split_index);
+extern "C" __declspec(dllexport) void SplitLongArray(int device_id, long *src, long *array1, long *array2, const unsigned int array_length, const unsigned int split_index);
+extern "C" __declspec(dllexport) void SplitFloatArray(int device_id, float *src, float *array1, float *array2, const unsigned int array_length, const unsigned int split_index);
+extern "C" __declspec(dllexport) void SplitDoubleArray(int device_id, double *src, double *array1, double *array2, const unsigned int array_length, const unsigned int split_index);
 
 void SplitIntArray(int device_id, int *src, int *array1, int *array2, const unsigned int array_length, const unsigned int split_index) {
 	splitArray<int>(device_id, src, array1, array2, array_length, split_index);
+}
+
+void SplitLongArray(int device_id, long *src, long *array1, long *array2, const unsigned int array_length, const unsigned int split_index) {
+	splitArray<long>(device_id, src, array1, array2, array_length, split_index);
+}
+
+void SplitFloatArray(int device_id, float *src, float *array1, float *array2, const unsigned int array_length, const unsigned int split_index) {
+	splitArray<float>(device_id, src, array1, array2, array_length, split_index);
+}
+
+void SplitDoubleArray(int device_id, double *src, double *array1, double *array2, const unsigned int array_length, const unsigned int split_index) {
+	splitArray<double>(device_id, src, array1, array2, array_length, split_index);
 }
