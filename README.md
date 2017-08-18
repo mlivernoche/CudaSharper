@@ -41,3 +41,4 @@ These kernels are written in such a way that bigger GPUs should be able to make 
 
 ## Changelog
 08/18/2017 - greatly improved the performance of the cuRAND functions.
+08/17/2017 - added support for float, long, and double to SplitArray; added MergeArrays.
