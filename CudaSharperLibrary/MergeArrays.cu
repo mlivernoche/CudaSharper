@@ -60,7 +60,7 @@ template<typename T> void mergeArrays(int device_id, T *result, T *array1, T *ar
 	cudaStreamSynchronize(stream1);
 	cudaStreamDestroy(stream1);
 
-	copyMergeArrays << <blocks, threadsPerBlock >> > (dResult, d_array1, 0, array1_length);
+	copyMergeArrays << <blocks, threadsPerBlock >> > (dResult, d_array1, 0, array1_length - 1);
 	copyMergeArrays << <blocks, threadsPerBlock >> > (dResult, d_array2, array1_length, result_length);
 
 	cudaMemcpy(result, dResult, result_length * sizeof(T), cudaMemcpyDeviceToHost);
@@ -70,23 +70,18 @@ template<typename T> void mergeArrays(int device_id, T *result, T *array1, T *ar
 	cudaFree(d_array2);
 }
 
-extern "C" __declspec(dllexport) void MergeIntArrays(int device_id, int *result, int *array1, int *array2, const unsigned int array1_length, const unsigned int array2_length);
-extern "C" __declspec(dllexport) void MergeLongArrays(int device_id, long *result, long *array1, long *array2, const unsigned int array1_length, const unsigned int array2_length);
-extern "C" __declspec(dllexport) void MergeFloatArrays(int device_id, float *result, float *array1, float *array2, const unsigned int array1_length, const unsigned int array2_length);
-extern "C" __declspec(dllexport) void MergeDoubleArrays(int device_id, double *result, double *array1, double *array2, const unsigned int array1_length, const unsigned int array2_length);
-
-void MergeIntArrays(int device_id, int *result, int *array1, int *array2, const unsigned int array1_length, const unsigned int array2_length) {
+extern "C" __declspec(dllexport) void MergeIntArrays(int device_id, int *result, int *array1, int *array2, const unsigned int array1_length, const unsigned int array2_length) {
 	mergeArrays<int>(device_id, result, array1, array2, array1_length, array2_length);
 }
 
-void MergeLongArrays(int device_id, long *result, long *array1, long *array2, const unsigned int array1_length, const unsigned int array2_length) {
+extern "C" __declspec(dllexport) void MergeLongArrays(int device_id, long *result, long *array1, long *array2, const unsigned int array1_length, const unsigned int array2_length) {
 	mergeArrays<long>(device_id, result, array1, array2, array1_length, array2_length);
 }
 
-void MergeFloatArrays(int device_id, float *result, float *array1, float *array2, const unsigned int array1_length, const unsigned int array2_length) {
+extern "C" __declspec(dllexport) void MergeFloatArrays(int device_id, float *result, float *array1, float *array2, const unsigned int array1_length, const unsigned int array2_length) {
 	mergeArrays<float>(device_id, result, array1, array2, array1_length, array2_length);
 }
 
-void MergeDoubleArrays(int device_id, double *result, double *array1, double *array2, const unsigned int array1_length, const unsigned int array2_length) {
+extern "C" __declspec(dllexport) void MergeDoubleArrays(int device_id, double *result, double *array1, double *array2, const unsigned int array1_length, const unsigned int array2_length) {
 	mergeArrays<double>(device_id, result, array1, array2, array1_length, array2_length);
 }
