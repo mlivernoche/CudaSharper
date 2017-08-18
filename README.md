@@ -35,5 +35,5 @@ Performance is very good, as far as I can tell. These kernels were written and t
 
 These kernels are written in such a way that bigger GPUs should be able to make use of more blocks and threads. So, running these kernels on a 1080 Ti should be much faster than on the GTX 1050 Ti I am using.
 
-Changelog
+## Changelog
 08/18/2017 - greatly improved the performance of the cuRAND functions.
