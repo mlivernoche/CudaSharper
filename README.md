@@ -9,15 +9,19 @@ CudaSharper - a wrapper for CUDA-accelerated functions. This file acts as a wrap
 
 CudaSharperLibrary.dll - the actual CUDA C code compiled as a C++/CLI assembly; however, it is unmanaged and therefore requires this wrapper to be used in C# projects. This must be compiled as a C++/CLI assembly to be used in your project; however, because it is unmanaged, it cannot be referenced.
 
+## CUDA version
+
+This was developed with CUDA toolkit 8.0 and two Pascal GPUs, GTX 1070 and GTX 1050 Ti. Support for older GPUs has not been tested, but they are possible.
+
 ## CudaSettings
-
-If you have an extra GPU (which I recommend when one is developing with CUDA), you can specify which CUDA-enabled device to use.
-
-CudaSettings.DeviceId: The ID of the device. 0 is the default CUDA-enabled device, 1 is the next one, etc. For example, in my system, my main GPU is a GTX 1070 (which is 0) and the second GPU is a GTX 1050 Ti (which is 1).
 
 CudaSettings.Load(): This function is meant to set the directory of the executeable. This is for loading CudaSharperLibrary.dll in CudaSharper.
 
 ## Current Functions
+
+### Construction of CudaSharper classes
+
+You have to specify the ID of the CUDA-enabled device to use when creating an object. The ID is simply an int, and starts at 0. You can also call GetCudaDeviceName(int device_id) to get the name of the CUDA device.
 
 ### Cuda
 1. SplitArray: Takes one array, and returns a tuple of each half. Supports int, float, long, double.
