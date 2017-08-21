@@ -3,25 +3,42 @@
 #include "cuda_profiler_api.h"
 #include "curand.h"
 #include "curand_kernel.h"
+#include <iostream>
+#include <algorithm>
+#include <time.h>
+#include <chrono>
 
-__global__ void init(unsigned int seed, curandState_t* states) {
-	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
+long time_seed() {
+	// time(NULL) is not precise enough to produce different sets of random numbers.
+	return std::chrono::system_clock::now().time_since_epoch().count();
+}
+
+__global__ void init(long seed, curandState_t* states) {
 	curand_init(
-		xid + seed,
+		(threadIdx.x + (blockIdx.x * blockDim.x)) + seed,
 		0,
 		0,
-		&states[xid]
+		&states[(threadIdx.x + (blockIdx.x * blockDim.x))]
 	);
 }
 
-__global__ void uniform_rand_kernel(curandState_t *states, float *numbers, int count) {
-	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
+__global__ void uniform_rand_kernel(curandState_t *states, float *numbers, unsigned int count, unsigned int maximum) {
+	// (threadIdx.x * N) + + offset
+	// N = number of elements
+	// offset = the position of the desired element.
+	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
+	extern __shared__ int smem[];
 
-	// This is an offset: it determines the starting point of this kernel's place in the array.
 	int offset = (threadIdx.x + (blockIdx.x * blockDim.x)) * count;
+	smem[(threadIdx.x * 2)] = maximum;
+	smem[(threadIdx.x * 2) + 1] = offset + count;
 
-	for (int n = offset; n < offset + count; n++) {
-		numbers[n] = curand_uniform(&states[xid]);
+	__syncthreads();
+
+	for (int n = offset; n < smem[(threadIdx.x * 2) + 1]; n++) {
+		if (n < smem[(threadIdx.x * 2)]) {
+			numbers[n] = curand_uniform(&states[(threadIdx.x + (blockIdx.x * blockDim.x))]);
+		}
 	}
 }
 
@@ -31,9 +48,10 @@ void _uniformRand(int device_id, int amount_of_numbers, float *result) {
 	cudaDeviceProp prop;
 	cudaGetDeviceProperties(&prop, device_id);
 
-	// uniform_rand_kernel prefers blocks over threads, but does not like only blocks and no threads.
-	const int threadsPerBlock = prop.warpSize * 2;
-	const int blocks = *prop.maxThreadsDim;
+	// we don't want >1000 threads doing 5 numbers each.
+	// kernel prefers blocks over threads, but does not like only blocks and no threads.
+	const int threadsPerBlock = prop.warpSize;
+	const int blocks = prop.multiProcessorCount * 2;
 	const int numberPerThread = (amount_of_numbers / (blocks * threadsPerBlock)) + 1;
 
 	curandState_t *states;
@@ -42,8 +60,11 @@ void _uniformRand(int device_id, int amount_of_numbers, float *result) {
 	cudaMalloc(&states, blocks * threadsPerBlock * sizeof(curandState_t));
 	cudaMalloc(&d_nums, amount_of_numbers * sizeof(float));
 
-	init << <blocks, threadsPerBlock >> > (time(0), states);
-	uniform_rand_kernel << <blocks, threadsPerBlock >> > (states, d_nums, numberPerThread);
+	init << <blocks, threadsPerBlock >> > (time_seed(), states);
+
+	// this kernel loves bandwidth, so distributing resources should be based on used shared memory.
+	unsigned int sharedMem = (sizeof(int) + sizeof(int)) * threadsPerBlock;
+	uniform_rand_kernel << <blocks, threadsPerBlock, sharedMem >> > (states, d_nums, numberPerThread, amount_of_numbers);
 
 	cudaMemcpy(result, d_nums, amount_of_numbers * sizeof(float), cudaMemcpyDeviceToHost);
 
@@ -55,14 +76,23 @@ extern "C" __declspec(dllexport) void UniformRand(int device_id, int amount_of_n
 	_uniformRand(device_id, amount_of_numbers, result);
 }
 
-__global__ void normal_rand_kernel(curandState_t *states, float *numbers, int count) {
-	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
+__global__ void normal_rand_kernel(curandState_t *states, float *numbers, unsigned int count, unsigned int maximum) {
+	// (threadIdx.x * N) + + offset
+	// N = number of elements
+	// offset = the position of the desired element.
+	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
+	extern __shared__ int smem[];
 
-	// This is an offset: it determines the starting point of this kernel's place in the array.
 	int offset = (threadIdx.x + (blockIdx.x * blockDim.x)) * count;
+	smem[(threadIdx.x * 2)] = maximum;
+	smem[(threadIdx.x * 2) + 1] = offset + count;
 
-	for (int n = offset; n < offset + count; n++) {
-		numbers[n] = curand_normal(&states[xid]);
+	__syncthreads();
+
+	for (int n = offset; n < smem[(threadIdx.x * 2) + 1]; n++) {
+		if (n < smem[(threadIdx.x * 2)]) {
+			numbers[n] = curand_normal(&states[(threadIdx.x + (blockIdx.x * blockDim.x))]);
+		}
 	}
 }
 
@@ -72,9 +102,9 @@ void _normalRand(int device_id, int amount_of_numbers, float *result) {
 	cudaDeviceProp prop;
 	cudaGetDeviceProperties(&prop, device_id);
 
-	// uniform_rand_kernel prefers blocks over threads, but does not like only blocks and no threads.
-	const int threadsPerBlock = prop.warpSize * 2;
-	const int blocks = *prop.maxThreadsDim;
+	// kernel prefers blocks over threads, but does not like only blocks and no threads.
+	const int threadsPerBlock = prop.warpSize;
+	const int blocks = prop.multiProcessorCount * 2;
 	const int numberPerThread = (amount_of_numbers / (blocks * threadsPerBlock)) + 1;
 
 	curandState_t *states;
@@ -83,8 +113,12 @@ void _normalRand(int device_id, int amount_of_numbers, float *result) {
 	cudaMalloc(&states, blocks * threadsPerBlock * sizeof(curandState_t));
 	cudaMalloc(&d_nums, amount_of_numbers * sizeof(float));
 
-	init << <blocks, threadsPerBlock >> > (time(0), states);
-	normal_rand_kernel << <blocks, threadsPerBlock >> > (states, d_nums, numberPerThread);
+	init << <blocks, threadsPerBlock >> > (time_seed(), states);
+
+	// this kernel loves bandwidth, so distributing resources should be based on used shared memory.
+	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
+	unsigned int sharedMem = (sizeof(int) + sizeof(int)) * threadsPerBlock;
+	normal_rand_kernel << <blocks, threadsPerBlock, sharedMem >> > (states, d_nums, numberPerThread, amount_of_numbers);
 
 	cudaMemcpy(result, d_nums, amount_of_numbers * sizeof(float), cudaMemcpyDeviceToHost);
 
