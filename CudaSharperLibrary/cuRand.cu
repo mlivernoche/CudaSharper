@@ -8,8 +8,6 @@
 #include <time.h>
 #include <chrono>
 
-#include "cuda_rand.h"
-
 long time_seed() {
 	// time(NULL) is not precise enough to produce different sets of random numbers.
 	return std::chrono::system_clock::now().time_since_epoch().count();
