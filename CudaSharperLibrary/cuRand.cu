@@ -96,15 +96,48 @@ extern "C" __declspec(dllexport) void NormalRand(int device_id, int amount_of_nu
 	_normalRand(device_id, amount_of_numbers, result);
 }
 
-__global__ void poisson_rand_kernel(curandState_t *states, int *numbers, double lambda, int count) {
-	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
+__global__ void poisson_rand_kernel(curandState_t *states, int *numbers, unsigned int count, unsigned int maximum, double lambda, int numbers_of_threads) {
+	extern __shared__ int smem[];
 
-	// This is an offset: it determines the starting point of this kernel's place in the array.
-	int offset = (threadIdx.x + (blockIdx.x * blockDim.x)) * count;
+	int *maximumShared = (int*)&smem[0];
+	int *countShared = (int*)&maximumShared[1];
+	double *lambdaShared = (double*)&countShared[1];
+	curandState_t *curandStateShared = (curandState_t*)&lambdaShared[1];
+	int *startShared = (int*)&curandStateShared[numbers_of_threads];
+	int *endShared = (int*)&startShared[numbers_of_threads];
 
-	for (int n = offset; n < offset + count; n++) {
-		numbers[n] = curand_poisson(&states[xid], lambda);
+	if (threadIdx.x == 0) {
+		// Make sure we do not go over this.
+		maximumShared[0] = maximum;
+
+		// This is the ending point in the *numbers array.
+		countShared[0] = count;
+
+		// The lambda.
+		lambdaShared[0] = lambda;
 	}
+
+	__syncthreads();
+
+	// The state.
+	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
+	curandStateShared[threadIdx.x] = states[xid];
+
+	// This is the starting point in the *numbers array.
+	startShared[threadIdx.x] = ((threadIdx.x + (blockIdx.x * blockDim.x)) * countShared[0]);
+
+	// This is the ending point in the *numbers array.
+	endShared[threadIdx.x] = startShared[threadIdx.x] + countShared[0];
+
+	__syncthreads();
+
+	for (int n = startShared[threadIdx.x]; n < endShared[threadIdx.x]; n++) {
+		if (n < maximumShared[0]) {
+			numbers[n] = curand_poisson(&curandStateShared[threadIdx.x], lambdaShared[0]);
+		}
+	}
+
+	states[xid] = curandStateShared[threadIdx.x];
 }
 
 void _poissonRand(int device_id, int amount_of_numbers, int *result, double lambda) {
@@ -113,9 +146,9 @@ void _poissonRand(int device_id, int amount_of_numbers, int *result, double lamb
 	cudaDeviceProp prop;
 	cudaGetDeviceProperties(&prop, device_id);
 
-	// uniform_rand_kernel prefers blocks over threads, but does not like only blocks and no threads.
-	const int threadsPerBlock = prop.warpSize * 2;
-	const int blocks = *prop.maxThreadsDim;
+	// kernel prefers blocks over threads, but does not like only blocks and no threads.
+	const int threadsPerBlock = prop.warpSize;
+	const int blocks = prop.multiProcessorCount * 2;
 	const int numberPerThread = (amount_of_numbers / (blocks * threadsPerBlock)) + 1;
 
 	curandState_t *states;
@@ -124,8 +157,12 @@ void _poissonRand(int device_id, int amount_of_numbers, int *result, double lamb
 	cudaMalloc(&states, blocks * threadsPerBlock * sizeof(curandState_t));
 	cudaMalloc(&d_nums, amount_of_numbers * sizeof(int));
 
-	init << <blocks, threadsPerBlock >> > (time(0), states);
-	poisson_rand_kernel << <blocks, threadsPerBlock >> > (states, d_nums, lambda, numberPerThread);
+	init << <blocks, threadsPerBlock >> > (time_seed(), states);
+
+	// this kernel loves bandwidth, so distributing resources should be based on used shared memory.
+	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
+	unsigned int sharedMem = (sizeof(int) * 2) + sizeof(double) + ((sizeof(curandState_t) + sizeof(int) + sizeof(int)) * threadsPerBlock);
+	poisson_rand_kernel << <blocks, threadsPerBlock, sharedMem >> > (states, d_nums, numberPerThread, amount_of_numbers, lambda, threadsPerBlock);
 
 	cudaMemcpy(result, d_nums, amount_of_numbers * sizeof(int), cudaMemcpyDeviceToHost);
 
