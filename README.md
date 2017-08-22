@@ -21,6 +21,7 @@ var cudaObject = new Cuda(1);
 var array1 = Enumerable.Range(0, 10_000);
 var array2 = Enumerable.Range(0, 10_000);
 
+// This takes arrays, but it returns IEnumerable<T> (see below for supported types).
 var merged_array = cudaObject.MergeArrays(array1.ToArray(), array2.ToArray());
 ```
 
