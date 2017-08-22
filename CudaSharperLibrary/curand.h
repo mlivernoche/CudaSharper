@@ -21,6 +21,10 @@ __global__ void normal_rand_kernel(curandState_t *states, float *numbers, unsign
 void _normalRand(int device_id, int amount_of_numbers, float *result);
 extern "C" __declspec(dllexport) void NormalRand(int device_id, int amount_of_numbers, float *result);
 
+__global__ void log_normal_rand_kernel(curandState_t *states, float *numbers, unsigned int count, unsigned int maximum, float mean, float stddev);
+void _logNormalRand(int device_id, int amount_of_numbers, float *result, float mean, float stddev);
+extern "C" __declspec(dllexport) void LogNormalRand(int device_id, int amount_of_numbers, float *result, float mean, float stddev);
+
 __global__ void poisson_rand_kernel(curandState_t *states, int *numbers, unsigned int count, unsigned int maximum, double lambda);
 void _poissonRand(int device_id, int amount_of_numbers, int *result, double lambda);
 extern "C" __declspec(dllexport) void PoissonRand(int device_id, int amount_of_numbers, int *result, double lambda);
