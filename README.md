@@ -9,16 +9,16 @@ CudaSharper - a wrapper for CUDA-accelerated functions. This file acts as a wrap
 
 CudaSharperLibrary.dll - the actual CUDA C code compiled as a C++/CLI assembly; however, it is unmanaged and therefore requires this wrapper to be used in C# projects. This must be compiled as a C++/CLI assembly to be used in your project; however, because it is unmanaged, it cannot be referenced.
 
-## CUDA version
+### When to use CPU vs GPU
+The CUDA programming model allows easy scaling of performance. However, due to the high latency of the global memory (e.g., GDDR5), the GPU is designed to have dozens of active threads per SM at any time to combat the high latency. The GPU has to be swarmed with threads to ensure the cores are being feed at all times. In other words, smaller work loads (e.g., generating 20 random numbers) will be faster on the CPU than on the GPU. The GPU performs best in large work loads (e.g. generating 50,000 random numbers).
+
+### CUDA version
 
 This was developed with CUDA toolkit 8.0 and two Pascal GPUs, GTX 1070 and GTX 1050 Ti. Support for older GPUs has not been tested, but they are possible.
 
 ## CudaSettings
 
 CudaSettings.Load(): This function is meant to set the directory of the executeable. This is for loading CudaSharperLibrary.dll in CudaSharper.
-
-## When to use CPU vs GPU
-The CUDA programming model allows easy scaling of performance. However, due to the high latency of the global memory (e.g., GDDR5), the GPU is designed to have dozens of active threads per SM at any time to combat the high latency. The GPU has to be swarmed with threads to ensure the cores are being feed at all times. In other words, smaller work loads (e.g., generating 20 random numbers) will be faster on the CPU than on the GPU. The GPU performs best in large work loads (e.g. generating 50,000 random numbers).
 
 ## Current Functions
 
