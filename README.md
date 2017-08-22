@@ -9,6 +9,34 @@ CudaSharper - a wrapper for CUDA-accelerated functions. This file acts as a wrap
 
 CudaSharperLibrary.dll - the actual CUDA C code compiled as a C++/CLI DLL assembly; however, it is unmanaged and therefore requires this wrapper to be used in C# projects. This must be compiled as a C++/CLI DLL assembly to be used in your project; however, because it is unmanaged, it cannot be referenced. The DLL needs to be in one of the [PATH that Windows searches in](https://en.wikipedia.org/wiki/PATH_(variable)). Calling CudaSettings.Load() will automically add AppDomain.CurrentDomain.BaseDirectory to the executable's PATH environment variables, so you can put CudaSharperLibrary.dll in the same directory for convenience.
 
+### Example \#1: Merging two arrays
+
+```
+// Load the DLL. It only has to be called once.
+CudaSettings.Load();
+
+// We'll use the second CUDA-enabled GPU (this system has a GTX 1070 [which is 0] and a GTX 1050 Ti [which is 1]).
+var cudaObject = new Cuda(1);
+
+var array1 = Enumerable.Range(0, 10_000);
+var array2 = Enumerable.Range(0, 10_000);
+
+var merged_array = cudaObject.MergeArrays(array1.ToArray(), array2.ToArray());
+```
+
+### Example \#2: Generating random numbers
+
+```
+// Load the DLL. It only has to be called once.
+CudaSettings.Load();
+
+// We'll use the first CUDA-enabled GPU (this system has a GTX 1070 [which is 0] and a GTX 1050 Ti [which is 1]).
+var cudaObject = new CuRand(0);
+
+// Generate 100,000 random numbers using a uniform distribution. The return value is IEnumerable<float>.
+var uniform_rand = cuRand.GenerateUniformDistribution(100_000);
+```
+
 ### When to use CPU vs GPU
 The CUDA programming model allows easy scaling of performance. However, due to the high latency of the global memory (e.g., GDDR5), the GPU is designed to have dozens of active threads per SM at any time to combat the high latency. The GPU has to be swarmed with threads to ensure the cores are being feed at all times. In other words, smaller work loads (e.g., generating 20 random numbers) will be faster on the CPU than on the GPU. The GPU performs best in large work loads (e.g. generating 50,000 random numbers).
 
