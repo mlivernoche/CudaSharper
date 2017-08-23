@@ -340,8 +340,20 @@ namespace CudaSharper
         void GenerateUniformDistribution(int amount_of_numbers, float[] result);
         IEnumerable<float> GenerateUniformDistribution(int amount_of_numbers);
 
+        void GenerateUniformDistributionDP(int amount_of_numbers, double[] result);
+        IEnumerable<double> GenerateUniformDistributionDP(int amount_of_numbers);
+
         void GenerateNormalDistribution(int amount_of_numbers, float[] result);
         IEnumerable<float> GenerateNormalDistribution(int amount_of_numbers);
+
+        void GenerateNormalDistributionDP(int amount_of_numbers, double[] result);
+        IEnumerable<double> GenerateNormalDistributionDP(int amount_of_numbers);
+
+        void GenerateLogNormalDistribution(int amount_of_numbers, float[] result, float mean, float stddev);
+        IEnumerable<float> GenerateLogNormalDistribution(int amount_of_numbers, float mean, float stddev);
+
+        void GenerateLogNormalDistributionDP(int amount_of_numbers, double[] result, float mean, float stddev);
+        IEnumerable<double> GenerateLogNormalDistributionDP(int amount_of_numbers, float mean, float stddev);
 
         void GeneratePoissonDistribution(int amount_of_numbers, int[] result, double lambda);
         IEnumerable<int> GeneratePoissonDistribution(int amount_of_numbers, double lambda);
@@ -367,11 +379,23 @@ namespace CudaSharper
         [DllImport("CudaSharperLibrary.dll")]
         private static extern void UniformRand(int device_id, int amount_of_numbers, float[] result);
 
+        /// <summary>
+        /// Generates random numbers using XORWOW and a uniform distribution. This method utilizies the single-precision (FP32) capabilities of the GPU. If you need higher precision,
+        /// there is a double-precision (FP64) version available; however, performance will be much worse, depending on the GPU being used.
+        /// </summary>
+        /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
+        /// <param name="result">The array that will hold the random numbers (in memory for the CPU to use).</param>
         public void GenerateUniformDistribution(int amount_of_numbers, float[] result)
         {
             UniformRand(DeviceId, amount_of_numbers, result);
         }
 
+        /// <summary>
+        /// Generates random numbers using XORWOW and a uniform distribution. This method utilizies the single-precision (FP32) capabilities of the GPU. If you need higher precision,
+        /// there is a double-precision (FP64) version available; however, performance will be much worse, depending on the GPU being used.
+        /// </summary>
+        /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
+        /// <returns>An IEnumerable holding the random numbers (in memory for the CPU to use).</returns>
         public IEnumerable<float> GenerateUniformDistribution(int amount_of_numbers)
         {
             var result = new float[amount_of_numbers];
@@ -380,13 +404,54 @@ namespace CudaSharper
         }
 
         [DllImport("CudaSharperLibrary.dll")]
+        private static extern void UniformRandDouble(int device_id, int amount_of_numbers, double[] result);
+
+        /// <summary>
+        /// Generate random numbers using XORWOW and a uniform distribution. This method utilizes the double-precision (FP64) capabilities of the GPU; this will perform worse than 
+        /// using the single-precision (FP32) capabilities, and much worse on GeForce versus Quadro and Tesla. (Recommend only using this if you know the FP64 performance
+        /// of the GPU being used).
+        /// </summary>
+        /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
+        /// <param name="result">The array that will hold the random numbers (in memory for the CPU to use).</param>
+        public void GenerateUniformDistributionDP(int amount_of_numbers, double[] result)
+        {
+            UniformRandDouble(DeviceId, amount_of_numbers, result);
+        }
+
+        /// <summary>
+        /// Generate random numbers using XORWOW and a uniform distribution. This method utilizes the double-precision (FP64) capabilities of the GPU; this will perform worse than 
+        /// using the single-precision (FP32) capabilities, and much worse on GeForce versus Quadro and Tesla. (Recommend only using this if you know the FP64 performance
+        /// of the GPU being used).
+        /// </summary>
+        /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
+        /// <returns>An IEnumerable holding the random numbers (in memory for the CPU to use).</returns>
+        public IEnumerable<double> GenerateUniformDistributionDP(int amount_of_numbers)
+        {
+            var result = new double[amount_of_numbers];
+            UniformRandDouble(DeviceId, amount_of_numbers, result);
+            return result;
+        }
+
+        [DllImport("CudaSharperLibrary.dll")]
         private static extern void LogNormalRand(int device_id, int amount_of_numbers, float[] result, float mean, float stddev);
 
+        /// <summary>
+        /// Generates random numbers using XORWOW and a log normal distribution. This method utilizies the single-precision (FP32) capabilities of the GPU. If you need higher precision,
+        /// there is a double-precision (FP64) version available; however, performance will be much worse, depending on the GPU being used.
+        /// </summary>
+        /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
+        /// <param name="result">The array that will hold the random numbers (in memory for the CPU to use).</param>
         public void GenerateLogNormalDistribution(int amount_of_numbers, float[] result, float mean, float stddev)
         {
             LogNormalRand(DeviceId, amount_of_numbers, result, mean, stddev);
         }
 
+        /// <summary>
+        /// Generates random numbers using XORWOW and a log normal distribution. This method utilizies the single-precision (FP32) capabilities of the GPU. If you need higher precision,
+        /// there is a double-precision (FP64) version available; however, performance will be much worse, depending on the GPU being used.
+        /// </summary>
+        /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
+        /// <returns>An IEnumerable holding the random numbers (in memory for the CPU to use).</returns>
         public IEnumerable<float> GenerateLogNormalDistribution(int amount_of_numbers, float mean, float stddev)
         {
             var result = new float[amount_of_numbers];
@@ -395,17 +460,91 @@ namespace CudaSharper
         }
 
         [DllImport("CudaSharperLibrary.dll")]
+        private static extern void LogNormalRandDouble(int device_id, int amount_of_numbers, double[] result, float mean, float stddev);
+
+        /// <summary>
+        /// Generate random numbers using XORWOW and a log normal distribution. This method utilizes the double-precision (FP64) capabilities of the GPU; this will perform worse than 
+        /// using the single-precision (FP32) capabilities, and much worse on GeForce versus Quadro and Tesla. (Recommend only using this if you know the FP64 performance
+        /// of the GPU being used).
+        /// </summary>
+        /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
+        /// <param name="result">The array that will hold the random numbers (in memory for the CPU to use).</param>
+        /// <param name="mean">The mean (average) of the distribution.</param>
+        /// <param name="stddev">The standard deviation of the distribution.</param>
+        public void GenerateLogNormalDistributionDP(int amount_of_numbers, double[] result, float mean, float stddev)
+        {
+            LogNormalRandDouble(DeviceId, amount_of_numbers, result, mean, stddev);
+        }
+
+        /// <summary>
+        /// Generate random numbers using XORWOW and a log normal distribution. This method utilizes the double-precision (FP64) capabilities of the GPU; this will perform worse than 
+        /// using the single-precision (FP32) capabilities, and much worse on GeForce versus Quadro and Tesla. (Recommend only using this if you know the FP64 performance
+        /// of the GPU being used).
+        /// </summary>
+        /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
+        /// <param name="mean">The mean (average) of the distribution.</param>
+        /// <param name="stddev">The standard deviation of the distribution.</param>
+        /// <returns>An IEnumerable holding the random numbers (in memory for the CPU to use).</returns>
+        public IEnumerable<double> GenerateLogNormalDistributionDP(int amount_of_numbers, float mean, float stddev)
+        {
+            var result = new double[amount_of_numbers];
+            LogNormalRandDouble(DeviceId, amount_of_numbers, result, mean, stddev);
+            return result;
+        }
+
+        [DllImport("CudaSharperLibrary.dll")]
         private static extern void NormalRand(int device_id, int amount_of_numbers, float[] result);
 
+        /// <summary>
+        /// Generates random numbers using XORWOW and a normal distribution. This method utilizies the single-precision (FP32) capabilities of the GPU. If you need higher precision,
+        /// there is a double-precision (FP64) version available; however, performance will be much worse, depending on the GPU being used.
+        /// </summary>
+        /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
+        /// <param name="result">The array that will hold the random numbers (in memory for the CPU to use).</param>
         public void GenerateNormalDistribution(int amount_of_numbers, float[] result)
         {
             NormalRand(DeviceId, amount_of_numbers, result);
         }
 
+        /// <summary>
+        /// Generates random numbers using XORWOW and a normal distribution. This method utilizies the single-precision (FP32) capabilities of the GPU. If you need higher precision,
+        /// there is a double-precision (FP64) version available; however, performance will be much worse, depending on the GPU being used.
+        /// </summary>
+        /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
+        /// <returns>An IEnumerable holding the random numbers (in memory for the CPU to use).</returns>
         public IEnumerable<float> GenerateNormalDistribution(int amount_of_numbers)
         {
             var result = new float[amount_of_numbers];
             NormalRand(DeviceId, amount_of_numbers, result);
+            return result;
+        }
+
+        [DllImport("CudaSharperLibrary.dll")]
+        private static extern void NormalRandDouble(int device_id, int amount_of_numbers, double[] result);
+
+        /// <summary>
+        /// Generates random numbers using XORWOW and a normal distribution. This method utilizes the double-precision (FP64) capabilities of the GPU; this will perform worse than 
+        /// using the single-precision (FP32) capabilities, and much worse on GeForce versus Quadro and Tesla. (Recommend only using this if you know the FP64 performance
+        /// of the GPU being used).
+        /// </summary>
+        /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
+        /// <param name="result">An IEnumerable holding the random numbers (in memory for the CPU to use).</param>
+        public void GenerateNormalDistributionDP(int amount_of_numbers, double[] result)
+        {
+            NormalRandDouble(DeviceId, amount_of_numbers, result);
+        }
+
+        /// <summary>
+        /// Generates random numbers using XORWOW and a normal distribution. This method utilizes the double-precision (FP64) capabilities of the GPU; this will perform worse than 
+        /// using the single-precision (FP32) capabilities, and much worse on GeForce versus Quadro and Tesla. (Recommend only using this if you know the FP64 performance
+        /// of the GPU being used).
+        /// </summary>
+        /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
+        /// <returns>An IEnumerable holding the random numbers (in memory for the CPU to use).</returns>
+        public IEnumerable<double> GenerateNormalDistributionDP(int amount_of_numbers)
+        {
+            var result = new double[amount_of_numbers];
+            NormalRandDouble(DeviceId, amount_of_numbers, result);
             return result;
         }
 
