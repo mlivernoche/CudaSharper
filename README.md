@@ -9,7 +9,33 @@ CudaSharper - a wrapper for CUDA-accelerated functions. This file acts as a wrap
 
 CudaSharperLibrary.dll - the actual CUDA C code compiled as a C++/CLI DLL assembly; however, it is unmanaged and therefore requires this wrapper to be used in C# projects. This must be compiled as a C++/CLI DLL assembly to be used in your project; however, because it is unmanaged, it cannot be referenced. The DLL needs to be in one of the [PATH that Windows searches in](https://en.wikipedia.org/wiki/PATH_(variable)). Calling CudaSettings.Load() will automically add AppDomain.CurrentDomain.BaseDirectory to the executable's PATH environment variables, so you can put CudaSharperLibrary.dll in the same directory for convenience.
 
-### Example \#1: Merging two arrays
+### Performance
+
+Performance is very good, as far as I can tell. These kernels were written and tested on a GTX 1050 Ti. Performance was profiled by NVIDIA Visual Profiler. CUDA is best used for large amounts of small data (e.g., tens of thousands or millions of ints) and simple computational operations. For example, if you just need to generate 10 random ints, then just use [System.Random](https://msdn.microsoft.com/en-us/library/system.random(v=vs.110).aspx).
+
+These kernels are written in such a way that bigger GPUs should be able to make use of more blocks and threads. So, running these kernels on a 1080 Ti should be much faster than on the GTX 1050 Ti I am using.
+
+When generating 100,000 random numbers using a GTX 1050 Ti, these are the results I get (after the methods have be JIT'd):
+
+```
+Executing CUDA kernels on a GeForce GTX 1050 Ti
+GenerateUniformDistribution took 3 ms.
+GenerateUniformDistributionDP took 2 ms.
+GenerateNormalDistribution took 2 ms.
+GenerateNormalDistributionDP took 4 ms.
+GenerateLogNormalDistribution took 2 ms.
+GenerateNormalDistributionDP took 3 ms.
+GeneratePoissonDistribution took 3 ms.
+```
+
+The code used to get these results are in PerformanceMetrics.cs
+
+### When to use CPU vs GPU
+The CUDA programming model allows easy scaling of performance. However, due to the high latency of the global memory (e.g., GDDR5), the GPU is designed to have dozens of active threads per SM at any time to combat the high latency. The GPU has to be swarmed with threads to ensure the cores are being feed at all times. In other words, smaller work loads (e.g., generating 20 random numbers) will be faster on the CPU than on the GPU. The GPU performs best in large work loads (e.g. generating 50,000 random numbers).
+
+### Examples
+
+#### Example \#1: Merging two arrays
 
 ```
 // Load the DLL. It only has to be called once.
@@ -25,7 +51,7 @@ var array2 = Enumerable.Range(0, 10_000);
 var merged_array = cudaObject.MergeArrays(array1.ToArray(), array2.ToArray());
 ```
 
-### Example \#2: Generating random numbers
+#### Example \#2: Generating random numbers
 
 ```
 // Load the DLL. It only has to be called once.
@@ -37,9 +63,6 @@ var cudaObject = new CuRand(0);
 // Generate 100,000 random numbers using a uniform distribution. The return value is IEnumerable<float>.
 var uniform_rand = cuRand.GenerateUniformDistribution(100_000);
 ```
-
-### When to use CPU vs GPU
-The CUDA programming model allows easy scaling of performance. However, due to the high latency of the global memory (e.g., GDDR5), the GPU is designed to have dozens of active threads per SM at any time to combat the high latency. The GPU has to be swarmed with threads to ensure the cores are being feed at all times. In other words, smaller work loads (e.g., generating 20 random numbers) will be faster on the CPU than on the GPU. The GPU performs best in large work loads (e.g. generating 50,000 random numbers).
 
 ### CUDA version
 
@@ -74,12 +97,6 @@ Allows generating random numbers with the cuRAND library. These should be used f
 | curand_log_normal_double | GenerateLogNormalDistributionDP | Uses XORWOW; uses double-precision/FP64. |
 
 The functions that generate double (e.g., curand_normal2) and quadruple (e.g., curand_normal4) tuples will be implemented seperately.
-
-## Performance
-
-Performance is very good, as far as I can tell. These kernels were written and tested on a GTX 1050 Ti. Performance was profiled by NVIDIA Visual Profiler. CUDA is best used for large amounts of small data (e.g., tens of thousands or millions of ints) and simple computational operations. For example, if you just need to generate 10 random ints, then just use System.Random.
-
-These kernels are written in such a way that bigger GPUs should be able to make use of more blocks and threads. So, running these kernels on a 1080 Ti should be much faster than on the GTX 1050 Ti I am using.
 
 ## Changelog
 08/18/2017 - greatly improved the performance of the cuRAND functions.
