@@ -69,9 +69,9 @@ Allows generating random numbers with the cuRAND library. These should be used f
 | curand_normal       | GenerateNormalDistribution |
 | curand_log_normal   | GenerateLogNormalDistribution |
 | curand_poisson      | GeneratePoissonDistribution |
-| curand_uniform_double | TODO |
-| curand_normal_double | TODO |
-| curand_log_normal_double | TODO |
+| curand_uniform_double | GenerateUniformDistributionDP |
+| curand_normal_double | GenerateNormalDistributionDP |
+| curand_log_normal_double | GenerateLogNormalDistributionDP |
 
 The functions that generate double (e.g., curand_normal2) and quadruple (e.g., curand_normal4) tuples will be implemented seperately.
 
