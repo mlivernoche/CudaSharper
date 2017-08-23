@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text;
 
 /*
  * CudaSharper - a wrapper for CUDA-accelerated functions. CudaSharper is not intended to write CUDA in C#, but rather a
@@ -53,14 +54,14 @@ namespace CudaSharper
             return GetCudaDeviceCount();
         }
 
-        [DllImport("CudaSharperLibrary.dll")]
-        private static extern void GetCudaDeviceName(int device_id, string device_name_ptr);
+        [DllImport("CudaSharperLibrary.dll", CallingConvention = CallingConvention.Cdecl)]
+        private static extern void GetCudaDeviceName(int device_id, StringBuilder device_name_ptr);
 
         public string GetCudaDeviceName(int device_id)
         {
-            string device_name = "None";
+            StringBuilder device_name = new StringBuilder(256);
             GetCudaDeviceName(device_id, device_name);
-            return device_name;
+            return device_name.ToString();
         }
     }
 
@@ -151,8 +152,8 @@ namespace CudaSharper
 
         public (IEnumerable<int>, IEnumerable<int>) SplitArray(int[] src, int length, int split_index)
         {
-            var array1 = new int[length];
-            var array2 = new int[length];
+            var array1 = new int[split_index];
+            var array2 = new int[length - split_index];
             SplitIntArray(DeviceId, src, array1, array2, length, split_index);
             return (array1, array2);
         }
@@ -167,8 +168,8 @@ namespace CudaSharper
 
         public (IEnumerable<long>, IEnumerable<long>) SplitArray(long[] src, int length, int split_index)
         {
-            var array1 = new long[length];
-            var array2 = new long[length];
+            var array1 = new long[split_index];
+            var array2 = new long[length - split_index];
             SplitLongArray(DeviceId, src, array1, array2, length, split_index);
             return (array1, array2);
         }
@@ -183,8 +184,8 @@ namespace CudaSharper
 
         public (IEnumerable<float>, IEnumerable<float>) SplitArray(float[] src, int length, int split_index)
         {
-            var array1 = new float[length];
-            var array2 = new float[length];
+            var array1 = new float[split_index];
+            var array2 = new float[length - split_index];
             SplitFloatArray(DeviceId, src, array1, array2, length, split_index);
             return (array1, array2);
         }
@@ -199,8 +200,8 @@ namespace CudaSharper
 
         public (IEnumerable<double>, IEnumerable<double>) SplitArray(double[] src, int length, int split_index)
         {
-            var array1 = new double[length];
-            var array2 = new double[length];
+            var array1 = new double[split_index];
+            var array2 = new double[length - split_index];
             SplitDoubleArray(DeviceId, src, array1, array2, length, split_index);
             return (array1, array2);
         }
@@ -375,6 +376,21 @@ namespace CudaSharper
         {
             var result = new float[amount_of_numbers];
             UniformRand(DeviceId, amount_of_numbers, result);
+            return result;
+        }
+
+        [DllImport("CudaSharperLibrary.dll")]
+        private static extern void LogNormalRand(int device_id, int amount_of_numbers, float[] result, float mean, float stddev);
+
+        public void GenerateLogNormalDistribution(int amount_of_numbers, float[] result, float mean, float stddev)
+        {
+            LogNormalRand(DeviceId, amount_of_numbers, result, mean, stddev);
+        }
+
+        public IEnumerable<float> GenerateLogNormalDistribution(int amount_of_numbers, float mean, float stddev)
+        {
+            var result = new float[amount_of_numbers];
+            LogNormalRand(DeviceId, amount_of_numbers, result, mean, stddev);
             return result;
         }
 
