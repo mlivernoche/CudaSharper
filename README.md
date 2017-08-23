@@ -63,15 +63,15 @@ You have to specify the ID of the CUDA-enabled device to use when creating an ob
 ### CuRand
 Allows generating random numbers with the cuRAND library. These should be used for situations that require a large amount of random numbers; for example, on a GTX 1050 Ti, curand_uniform can generate 50,000 random numbers in about 10-13 milliseconds. These are the cuRAND distributions [(you can view the entire list here)](http://docs.nvidia.com/cuda/curand/device-api-overview.html#distributions):
 
-| cuRAND Distribution | CudaSharper Method |
-| ------------------- | ------------------ |
-| curand_uniform      | GenerateUniformDistribution |
-| curand_normal       | GenerateNormalDistribution |
-| curand_log_normal   | GenerateLogNormalDistribution |
-| curand_poisson      | GeneratePoissonDistribution |
-| curand_uniform_double | GenerateUniformDistributionDP |
-| curand_normal_double | GenerateNormalDistributionDP |
-| curand_log_normal_double | GenerateLogNormalDistributionDP |
+| cuRAND Distribution | CudaSharper Method | Notes |
+| ------------------- | ------------------ | ----- |
+| curand_uniform      | GenerateUniformDistribution | Uses XORWOW; uses single-precision/FP32. |
+| curand_normal       | GenerateNormalDistribution | Uses XORWOW; uses single-precision/FP32. |
+| curand_log_normal   | GenerateLogNormalDistribution | Uses XORWOW; uses single-precision/FP32. |
+| curand_poisson      | GeneratePoissonDistribution | Not finished; does not preprocess on host. |
+| curand_uniform_double | GenerateUniformDistributionDP | Uses XORWOW; uses double-precision/FP64. |
+| curand_normal_double | GenerateNormalDistributionDP | Uses XORWOW; uses double-precision/FP64. |
+| curand_log_normal_double | GenerateLogNormalDistributionDP | Uses XORWOW; uses double-precision/FP64. |
 
 The functions that generate double (e.g., curand_normal2) and quadruple (e.g., curand_normal4) tuples will be implemented seperately.
 
