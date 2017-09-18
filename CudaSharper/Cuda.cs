@@ -18,32 +18,6 @@ using System.Text;
 
 namespace CudaSharper
 {
-    public static class CudaSettings
-    {
-        private static bool workingDirSet { get; set; } = false;
-
-        public static void Load(string working_directory)
-        {
-            if (workingDirSet)
-                return;
-
-            Environment.SetEnvironmentVariable("PATH", Environment.GetEnvironmentVariable("PATH") + AppDomain.CurrentDomain.BaseDirectory);
-            workingDirSet = true;
-        }
-
-        public static void Load()
-        {
-            Load(AppDomain.CurrentDomain.BaseDirectory);
-        }
-    }
-
-    internal interface ICudaInfo
-    {
-        int CudaDevicesCount();
-        string GetCudaDeviceName(int device_id);
-        int DeviceId { get; }
-    }
-
     public class CudaInfo
     {
         [DllImport("CudaSharperLibrary.dll")]
@@ -65,6 +39,32 @@ namespace CudaSharper
         }
     }
 
+    internal interface ICudaInfo
+    {
+        int CudaDevicesCount();
+        string GetCudaDeviceName(int device_id);
+        int DeviceId { get; }
+    }
+
+    public static class CudaSettings
+    {
+        private static bool workingDirSet { get; set; } = false;
+
+        public static void Load(string working_directory)
+        {
+            if (workingDirSet)
+                return;
+
+            Environment.SetEnvironmentVariable("PATH", Environment.GetEnvironmentVariable("PATH") + AppDomain.CurrentDomain.BaseDirectory);
+            workingDirSet = true;
+        }
+
+        public static void Load()
+        {
+            Load(AppDomain.CurrentDomain.BaseDirectory);
+        }
+    }
+
     internal interface ICuda : ICudaInfo
     {
         /*
@@ -74,17 +74,17 @@ namespace CudaSharper
          * - float[], (IEnumerable<float>, IEnumerable<float>)
          * - double[], (IEnumerable<double>, IEnumerable<double>)
          */
-        void SplitArray(int[] src, int[] array1, int[] array2, int length, int split_index);
-        (IEnumerable<int>, IEnumerable<int>) SplitArray(int[] src, int length, int split_index);
+        void SplitArray(int[] src, int[] array1, int[] array2, uint length, uint split_index);
+        (IEnumerable<int>, IEnumerable<int>) SplitArray(int[] src, uint length, uint split_index);
 
-        void SplitArray(long[] src, long[] array1, long[] array2, int length, int split_index);
-        (IEnumerable<long>, IEnumerable<long>) SplitArray(long[] src, int length, int split_index);
+        void SplitArray(long[] src, long[] array1, long[] array2, uint length, uint split_index);
+        (IEnumerable<long>, IEnumerable<long>) SplitArray(long[] src, uint length, uint split_index);
 
-        void SplitArray(float[] src, float[] array1, float[] array2, int length, int split_index);
-        (IEnumerable<float>, IEnumerable<float>) SplitArray(float[] src, int length, int split_index);
+        void SplitArray(float[] src, float[] array1, float[] array2, uint length, uint split_index);
+        (IEnumerable<float>, IEnumerable<float>) SplitArray(float[] src, uint length, uint split_index);
 
-        void SplitArray(double[] src, double[] array1, double[] array2, int length, int split_index);
-        (IEnumerable<double>, IEnumerable<double>) SplitArray(double[] src, int length, int split_index);
+        void SplitArray(double[] src, double[] array1, double[] array2, uint length, uint split_index);
+        (IEnumerable<double>, IEnumerable<double>) SplitArray(double[] src, uint length, uint split_index);
 
         /*
          * MergeArrays:
@@ -143,15 +143,21 @@ namespace CudaSharper
         }
 
         [DllImport("CudaSharperLibrary.dll")]
-        private static extern void SplitIntArray(int device_id, int[] src, int[] array1, int[] array2, int length, int split_index);
+        private static extern void SplitIntArray(int device_id, int[] src, int[] array1, int[] array2, uint length, uint split_index);
 
-        public void SplitArray(int[] src, int[] array1, int[] array2, int length, int split_index)
+        public void SplitArray(int[] src, int[] array1, int[] array2, uint length, uint split_index)
         {
+            if (split_index >= length)
+                throw new ArgumentOutOfRangeException(string.Format("Split index is greater then the length of the array. Supplied values: length={0}, split_index={1}.", length, split_index));
+
             SplitIntArray(DeviceId, src, array1, array2, length, split_index);
         }
 
-        public (IEnumerable<int>, IEnumerable<int>) SplitArray(int[] src, int length, int split_index)
+        public (IEnumerable<int>, IEnumerable<int>) SplitArray(int[] src, uint length, uint split_index)
         {
+            if (split_index >= length)
+                throw new ArgumentOutOfRangeException(string.Format("Split index is greater then the length of the array. Supplied values: length={0}, split_index={1}.", length, split_index));
+
             var array1 = new int[split_index];
             var array2 = new int[length - split_index];
             SplitIntArray(DeviceId, src, array1, array2, length, split_index);
@@ -159,15 +165,21 @@ namespace CudaSharper
         }
 
         [DllImport("CudaSharperLibrary.dll")]
-        private static extern void SplitLongArray(int device_id, long[] src, long[] array1, long[] array2, int length, int split_index);
+        private static extern void SplitLongArray(int device_id, long[] src, long[] array1, long[] array2, uint length, uint split_index);
 
-        public void SplitArray(long[] src, long[] array1, long[] array2, int length, int split_index)
+        public void SplitArray(long[] src, long[] array1, long[] array2, uint length, uint split_index)
         {
+            if (split_index >= length)
+                throw new ArgumentOutOfRangeException(string.Format("Split index is greater then the length of the array. Supplied values: length={0}, split_index={1}.", length, split_index));
+
             SplitLongArray(DeviceId, src, array1, array2, length, split_index);
         }
 
-        public (IEnumerable<long>, IEnumerable<long>) SplitArray(long[] src, int length, int split_index)
+        public (IEnumerable<long>, IEnumerable<long>) SplitArray(long[] src, uint length, uint split_index)
         {
+            if (split_index >= length)
+                throw new ArgumentOutOfRangeException(string.Format("Split index is greater then the length of the array. Supplied values: length={0}, split_index={1}.", length, split_index));
+
             var array1 = new long[split_index];
             var array2 = new long[length - split_index];
             SplitLongArray(DeviceId, src, array1, array2, length, split_index);
@@ -175,15 +187,21 @@ namespace CudaSharper
         }
 
         [DllImport("CudaSharperLibrary.dll")]
-        private static extern void SplitFloatArray(int device_id, float[] src, float[] array1, float[] array2, int length, int split_index);
+        private static extern void SplitFloatArray(int device_id, float[] src, float[] array1, float[] array2, uint length, uint split_index);
 
-        public void SplitArray(float[] src, float[] array1, float[] array2, int length, int split_index)
+        public void SplitArray(float[] src, float[] array1, float[] array2, uint length, uint split_index)
         {
+            if (split_index >= length)
+                throw new ArgumentOutOfRangeException(string.Format("Split index is greater then the length of the array. Supplied values: length={0}, split_index={1}.", length, split_index));
+
             SplitFloatArray(DeviceId, src, array1, array2, length, split_index);
         }
 
-        public (IEnumerable<float>, IEnumerable<float>) SplitArray(float[] src, int length, int split_index)
+        public (IEnumerable<float>, IEnumerable<float>) SplitArray(float[] src, uint length, uint split_index)
         {
+            if (split_index >= length)
+                throw new ArgumentOutOfRangeException(string.Format("Split index is greater then the length of the array. Supplied values: length={0}, split_index={1}.", length, split_index));
+
             var array1 = new float[split_index];
             var array2 = new float[length - split_index];
             SplitFloatArray(DeviceId, src, array1, array2, length, split_index);
@@ -191,15 +209,21 @@ namespace CudaSharper
         }
 
         [DllImport("CudaSharperLibrary.dll")]
-        private static extern void SplitDoubleArray(int device_id, double[] src, double[] array1, double[] array2, int length, int split_index);
+        private static extern void SplitDoubleArray(int device_id, double[] src, double[] array1, double[] array2, uint length, uint split_index);
 
-        public void SplitArray(double[] src, double[] array1, double[] array2, int length, int split_index)
+        public void SplitArray(double[] src, double[] array1, double[] array2, uint length, uint split_index)
         {
+            if (split_index >= length)
+                throw new ArgumentOutOfRangeException(string.Format("Split index is greater then the length of the array. Supplied values: length={0}, split_index={1}.", length, split_index));
+
             SplitDoubleArray(DeviceId, src, array1, array2, length, split_index);
         }
 
-        public (IEnumerable<double>, IEnumerable<double>) SplitArray(double[] src, int length, int split_index)
+        public (IEnumerable<double>, IEnumerable<double>) SplitArray(double[] src, uint length, uint split_index)
         {
+            if (split_index >= length)
+                throw new ArgumentOutOfRangeException(string.Format("Split index is greater then the length of the array. Supplied values: length={0}, split_index={1}.", length, split_index));
+
             var array1 = new double[split_index];
             var array2 = new double[length - split_index];
             SplitDoubleArray(DeviceId, src, array1, array2, length, split_index);
@@ -207,32 +231,44 @@ namespace CudaSharper
         }
 
         [DllImport("CudaSharperLibrary.dll")]
-        private static extern void MergeIntArrays(int device_id, int[] result, int[] array1, int[] array2, int array1_length, int array2_length);
+        private static extern void MergeIntArrays(int device_id, int[] result, int[] array1, int[] array2, uint array1_length, uint array2_length);
 
         public void MergeArrays(int[] result, int[] array1, int[] array2)
         {
-            MergeIntArrays(DeviceId, result, array1, array2, array1.Length, array2.Length);
+            if (array1.Length + array2.Length > Int32.MaxValue)
+                throw new Exception("Resultant array is too large.");
+
+            MergeIntArrays(DeviceId, result, array1, array2, (uint)array1.Length, (uint)array2.Length);
         }
 
         public IEnumerable<int> MergeArrays(int[] array1, int[] array2)
         {
+            if (array1.Length + array2.Length > Int32.MaxValue)
+                throw new Exception("Resultant array is too large.");
+
             var result = new int[array1.Length + array2.Length];
-            MergeIntArrays(DeviceId, result, array1, array2, array1.Length, array2.Length);
+            MergeIntArrays(DeviceId, result, array1, array2, (uint)array1.Length, (uint)array2.Length);
             return result;
         }
 
         [DllImport("CudaSharperLibrary.dll")]
-        private static extern void MergeLongArrays(int device_id, long[] result, long[] array1, long[] array2, int array1_length, int array2_length);
+        private static extern void MergeLongArrays(int device_id, long[] result, long[] array1, long[] array2, uint array1_length, uint array2_length);
 
         public void MergeArrays(long[] result, long[] array1, long[] array2)
         {
-            MergeLongArrays(DeviceId, result, array1, array2, array1.Length, array2.Length);
+            if (array1.Length + array2.Length > Int32.MaxValue)
+                throw new Exception("Resultant array is too large.");
+
+            MergeLongArrays(DeviceId, result, array1, array2, (uint) array1.Length, (uint) array2.Length);
         }
 
         public IEnumerable<long> MergeArrays(long[] array1, long[] array2)
         {
+            if (array1.Length + array2.Length > Int32.MaxValue)
+                throw new Exception("Resultant array is too large.");
+
             var result = new long[array1.Length + array2.Length];
-            MergeLongArrays(DeviceId, result, array1, array2, array1.Length, array2.Length);
+            MergeLongArrays(DeviceId, result, array1, array2, (uint) array1.Length, (uint) array2.Length);
             return result;
         }
 
@@ -241,11 +277,17 @@ namespace CudaSharper
 
         public void MergeArrays(float[] result, float[] array1, float[] array2)
         {
+            if (array1.Length + array2.Length > Int32.MaxValue)
+                throw new Exception("Resultant array is too large.");
+
             MergeFloatArrays(DeviceId, result, array1, array2, array1.Length, array2.Length);
         }
 
         public IEnumerable<float> MergeArrays(float[] array1, float[] array2)
         {
+            if (array1.Length + array2.Length > Int32.MaxValue)
+                throw new Exception("Resultant array is too large.");
+
             var result = new float[array1.Length + array2.Length];
             MergeFloatArrays(DeviceId, result, array1, array2, array1.Length, array2.Length);
             return result;
@@ -256,11 +298,17 @@ namespace CudaSharper
 
         public void MergeArrays(double[] result, double[] array1, double[] array2)
         {
+            if (array1.Length + array2.Length > Int32.MaxValue)
+                throw new Exception("Resultant array is too large.");
+
             MergeDoubleArrays(DeviceId, result, array1, array2, array1.Length, array2.Length);
         }
 
         public IEnumerable<double> MergeArrays(double[] array1, double[] array2)
         {
+            if (array1.Length + array2.Length > Int32.MaxValue)
+                throw new Exception("Resultant array is too large.");
+
             var result = new double[array1.Length + array2.Length];
             MergeDoubleArrays(DeviceId, result, array1, array2, array1.Length, array2.Length);
             return result;
@@ -271,13 +319,17 @@ namespace CudaSharper
 
         public void AddArrays(int[] result, int[] array1, int[] array2)
         {
-            if (array1.Length != result.Length || array2.Length != result.Length) throw new Exception("Bad arrays given; they need to be the same length.");
+            if (array1.Length != result.Length || array2.Length != result.Length)
+                throw new ArgumentOutOfRangeException("Bad arrays given; they need to be the same length.");
+
             AddIntArrays(DeviceId, result, array1, array2, array1.Length);
         }
 
         public IEnumerable<int> AddArrays(int[] array1, int[] array2)
         {
-            if (array1.Length != array2.Length) throw new Exception("Bad arrays given; they need to be the same length.");
+            if (array1.Length != array2.Length)
+                throw new ArgumentOutOfRangeException("Bad arrays given; they need to be the same length.");
+
             var result = new int[array1.Length];
             AddIntArrays(DeviceId, result, array1, array2, array1.Length);
             return result;
@@ -288,13 +340,17 @@ namespace CudaSharper
 
         public void AddArrays(float[] result, float[] array1, float[] array2)
         {
-            if (array1.Length != result.Length || array2.Length != result.Length) throw new Exception("Bad arrays given; they need to be the same length.");
+            if (array1.Length != result.Length || array2.Length != result.Length)
+                throw new ArgumentOutOfRangeException("Bad arrays given; they need to be the same length.");
+
             AddFloatArrays(DeviceId, result, array1, array2, array1.Length);
         }
 
         public IEnumerable<float> AddArrays(float[] array1, float[] array2)
         {
-            if (array1.Length != array2.Length) throw new Exception("Bad arrays given; they need to be the same length.");
+            if (array1.Length != array2.Length)
+                throw new ArgumentOutOfRangeException("Bad arrays given; they need to be the same length.");
+
             var result = new float[array1.Length];
             AddFloatArrays(DeviceId, result, array1, array2, array1.Length);
             return result;
@@ -305,13 +361,17 @@ namespace CudaSharper
 
         public void AddArrays(long[] result, long[] array1, long[] array2)
         {
-            if (array1.Length != result.Length || array2.Length != result.Length) throw new Exception("Bad arrays given; they need to be the same length.");
+            if (array1.Length != result.Length || array2.Length != result.Length)
+                throw new ArgumentOutOfRangeException("Bad arrays given; they need to be the same length.");
+
             AddLongArrays(DeviceId, result, array1, array2, array1.Length);
         }
 
         public IEnumerable<long> AddArrays(long[] array1, long[] array2)
         {
-            if (array1.Length != array2.Length) throw new Exception("Bad arrays given; they need to be the same length.");
+            if (array1.Length != array2.Length)
+                throw new Exception("Bad arrays given; they need to be the same length.");
+
             var result = new long[array1.Length];
             AddLongArrays(DeviceId, result, array1, array2, array1.Length);
             return result;
@@ -322,13 +382,17 @@ namespace CudaSharper
 
         public void AddArrays(double[] result, double[] array1, double[] array2)
         {
-            if (array1.Length != result.Length || array2.Length != result.Length) throw new Exception("Bad arrays given; they need to be the same length.");
+            if (array1.Length != result.Length || array2.Length != result.Length)
+                throw new Exception("Bad arrays given; they need to be the same length.");
+
             AddDoubleArrays(DeviceId, result, array1, array2, array1.Length);
         }
 
         public IEnumerable<double> AddArrays(double[] array1, double[] array2)
         {
-            if (array1.Length != array2.Length) throw new Exception("Bad arrays given; they need to be the same length.");
+            if (array1.Length != array2.Length)
+                throw new Exception("Bad arrays given; they need to be the same length.");
+
             var result = new double[array1.Length];
             AddDoubleArrays(DeviceId, result, array1, array2, array1.Length);
             return result;
@@ -371,7 +435,7 @@ namespace CudaSharper
         public CuRand(int device_id)
         {
             if ((device_id + 1) > CudaDevicesCount())
-                throw new Exception("Bad DeviceId provided: not enough CUDA-enabled devices available. Devices available: " + CudaDevicesCount() + ". DeviceId: " + device_id);
+                throw new ArgumentOutOfRangeException("Bad DeviceId provided: not enough CUDA-enabled devices available. Devices available: " + CudaDevicesCount() + ". DeviceId: " + device_id);
 
             DeviceId = device_id;
         }
