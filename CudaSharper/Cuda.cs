@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Text;
 
 /*
  * CudaSharper - a wrapper for CUDA-accelerated functions. CudaSharper is not intended to write CUDA in C#, but rather a
@@ -18,116 +17,12 @@ using System.Text;
 
 namespace CudaSharper
 {
-    public class CudaInfo
+
+    public class Cuda : ICudaDevice, ICuda
     {
-        [DllImport("CudaSharperLibrary.dll")]
-        private static extern int GetCudaDeviceCount();
+        private ICudaDevice CudaDeviceComponent { get; }
 
-        public int CudaDevicesCount()
-        {
-            return GetCudaDeviceCount();
-        }
-
-        [DllImport("CudaSharperLibrary.dll", CallingConvention = CallingConvention.Cdecl)]
-        private static extern void GetCudaDeviceName(int device_id, StringBuilder device_name_ptr);
-
-        public string GetCudaDeviceName(int device_id)
-        {
-            StringBuilder device_name = new StringBuilder(256);
-            GetCudaDeviceName(device_id, device_name);
-            return device_name.ToString();
-        }
-    }
-
-    internal interface ICudaInfo
-    {
-        int CudaDevicesCount();
-        string GetCudaDeviceName(int device_id);
-        int DeviceId { get; }
-    }
-
-    public static class CudaSettings
-    {
-        private static bool workingDirSet { get; set; } = false;
-
-        public static void Load(string working_directory)
-        {
-            if (workingDirSet)
-                return;
-
-            Environment.SetEnvironmentVariable("PATH", Environment.GetEnvironmentVariable("PATH") + AppDomain.CurrentDomain.BaseDirectory);
-            workingDirSet = true;
-        }
-
-        public static void Load()
-        {
-            Load(AppDomain.CurrentDomain.BaseDirectory);
-        }
-    }
-
-    internal interface ICuda : ICudaInfo
-    {
-        /*
-         * SplitArray:
-         * - int[], (IEnumerable<int>, IEnumerable<int>)
-         * - long[], (IEnumerable<float>, IEnumerable<float>)
-         * - float[], (IEnumerable<float>, IEnumerable<float>)
-         * - double[], (IEnumerable<double>, IEnumerable<double>)
-         */
-        void SplitArray(int[] src, int[] array1, int[] array2, uint length, uint split_index);
-        (IEnumerable<int>, IEnumerable<int>) SplitArray(int[] src, uint length, uint split_index);
-
-        void SplitArray(long[] src, long[] array1, long[] array2, uint length, uint split_index);
-        (IEnumerable<long>, IEnumerable<long>) SplitArray(long[] src, uint length, uint split_index);
-
-        void SplitArray(float[] src, float[] array1, float[] array2, uint length, uint split_index);
-        (IEnumerable<float>, IEnumerable<float>) SplitArray(float[] src, uint length, uint split_index);
-
-        void SplitArray(double[] src, double[] array1, double[] array2, uint length, uint split_index);
-        (IEnumerable<double>, IEnumerable<double>) SplitArray(double[] src, uint length, uint split_index);
-
-        /*
-         * MergeArrays:
-         * - int[], IEnumerable<int>
-         * - long[], IEnumerable<float>
-         * - float[], IEnumerable<float>
-         * - double[], IEnumerable<double>
-         */
-        void MergeArrays(int[] result, int[] array1, int[] array2);
-        IEnumerable<int> MergeArrays(int[] array1, int[] array2);
-
-        void MergeArrays(long[] result, long[] array1, long[] array2);
-        IEnumerable<long> MergeArrays(long[] array1, long[] array2);
-
-        void MergeArrays(float[] result, float[] array1, float[] array2);
-        IEnumerable<float> MergeArrays(float[] array1, float[] array2);
-
-        void MergeArrays(double[] result, double[] array1, double[] array2);
-        IEnumerable<double> MergeArrays(double[] array1, double[] array2);
-
-        /*
-         * MergeArrays:
-         * - int[], IEnumerable<int>
-         * - long[], IEnumerable<float>
-         * - float[], IEnumerable<float>
-         * - double[], IEnumerable<double>
-         */
-        void AddArrays(int[] result, int[] array1, int[] array2);
-        IEnumerable<int> AddArrays(int[] array1, int[] array2);
-
-        void AddArrays(long[] result, long[] array1, long[] array2);
-        IEnumerable<long> AddArrays(long[] array1, long[] array2);
-
-        void AddArrays(float[] result, float[] array1, float[] array2);
-        IEnumerable<float> AddArrays(float[] array1, float[] array2);
-
-        void AddArrays(double[] result, double[] array1, double[] array2);
-        IEnumerable<double> AddArrays(double[] array1, double[] array2);
-    }
-
-    public class Cuda : CudaInfo, ICuda
-    {
-        public int DeviceId { get; }
+        public int DeviceId => CudaDeviceComponent.DeviceId;
 
         static Cuda()
         {
@@ -136,10 +31,20 @@ namespace CudaSharper
 
         public Cuda(int device_id)
         {
-            if((device_id + 1) > CudaDevicesCount())
-                throw new Exception("Bad DeviceId provided: not enough CUDA-enabled devices available.");
+            if ((device_id + 1) > CudaDevicesCount())
+                throw new ArgumentOutOfRangeException("Bad DeviceId provided: not enough CUDA-enabled devices available. Devices available: " + CudaDevicesCount() + ". DeviceId: " + device_id);
 
-            DeviceId = device_id;
+            CudaDeviceComponent = new CudaDevice(device_id);
+        }
+
+        public int CudaDevicesCount()
+        {
+            return CudaDeviceComponent.CudaDevicesCount();
+        }
+
+        public string GetCudaDeviceName(int device_id)
+        {
+            return CudaDeviceComponent.GetCudaDeviceName(device_id);
         }
 
         [DllImport("CudaSharperLibrary.dll")]
@@ -399,7 +304,7 @@ namespace CudaSharper
         }
     }
 
-    internal interface ICuRand : ICudaInfo
+    internal interface ICuRand : ICudaDevice
     {
         void GenerateUniformDistribution(int amount_of_numbers, float[] result);
         IEnumerable<float> GenerateUniformDistribution(int amount_of_numbers);
@@ -423,9 +328,11 @@ namespace CudaSharper
         IEnumerable<int> GeneratePoissonDistribution(int amount_of_numbers, double lambda);
     }
 
-    public class CuRand : CudaInfo, ICuRand
+    public class CuRand : ICudaDevice, ICuRand
     {
-        public int DeviceId { get; }
+        private ICudaDevice CudaDeviceComponent { get; }
+
+        public int DeviceId => CudaDeviceComponent.DeviceId;
 
         static CuRand()
         {
@@ -434,10 +341,17 @@ namespace CudaSharper
 
         public CuRand(int device_id)
         {
-            if ((device_id + 1) > CudaDevicesCount())
-                throw new ArgumentOutOfRangeException("Bad DeviceId provided: not enough CUDA-enabled devices available. Devices available: " + CudaDevicesCount() + ". DeviceId: " + device_id);
+            CudaDeviceComponent = new CudaDevice(device_id);
+        }
 
-            DeviceId = device_id;
+        public int CudaDevicesCount()
+        {
+            return CudaDeviceComponent.CudaDevicesCount();
+        }
+
+        public string GetCudaDeviceName(int device_id)
+        {
+            return CudaDeviceComponent.GetCudaDeviceName(device_id);
         }
 
         [DllImport("CudaSharperLibrary.dll")]
