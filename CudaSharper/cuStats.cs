@@ -52,5 +52,31 @@ namespace CudaSharper
         {
             return SampleStandardDeviation(sample, sample.Average());
         }
+
+        [DllImport("CudaSharperLibrary.dll")]
+        private static extern double StandardDeviationFloat(uint device_id, float[] sample, ulong sample_size, double mean);
+
+        public double StandardDeviation(float[] sample, double mean)
+        {
+            return StandardDeviationFloat((uint)CudaDeviceComponent.DeviceId, sample, (ulong)sample.Length, mean);
+        }
+
+        public double StandardDeviation(float[] sample)
+        {
+            return StandardDeviation(sample, sample.Average());
+        }
+
+        [DllImport("CudaSharperLibrary.dll")]
+        private static extern double StandardDeviationDouble(uint device_id, double[] sample, ulong sample_size, double mean);
+
+        public double StandardDeviation(double[] sample, double mean)
+        {
+            return StandardDeviationDouble((uint)CudaDeviceComponent.DeviceId, sample, (ulong)sample.Length, mean);
+        }
+
+        public double StandardDeviation(double[] sample)
+        {
+            return StandardDeviation(sample, sample.Average());
+        }
     }
 }
