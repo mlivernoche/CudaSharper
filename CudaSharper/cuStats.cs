@@ -10,7 +10,7 @@ namespace CudaSharper
     {
         private ICudaDevice CudaDeviceComponent { get; }
 
-        public int DeviceId => throw new NotImplementedException();
+        public int DeviceId => CudaDeviceComponent.DeviceId;
 
         public CuStats(int device_id)
         {
