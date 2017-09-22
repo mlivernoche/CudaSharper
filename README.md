@@ -22,6 +22,12 @@ You will need the two components mentioned above, CudaSharper and CudaSharperLib
 
 The currently latest version of Visual Studio for the CUDA Toolkit is Visual Studio 2015. The version I used is Visual Studio 2015 Community Version 14.0.25431.01. To compile the DLL correctly, you must configure the properties of the project. The only setting that needs to be changed is to set the **Common Runtime Language Support**  to **Common Language Support Runtime (/clr)** (**Pure MSIL** and **Safe MSIL** have not been tested).
 
+### Current Libraries
+
+1. cuArray - for manipulating arrays. Examples: splitting and merging arrays, or adding and subtracting arrays.
+2. CUDA Rand - implementation of cuRAND for use in C#. Examples: standard normal distributions, uniform distributions, and Poisson distributions.
+3. cuStats - statistical functions for large data sets. Examples: sample standard deviation.
+
 ## Performance
 
 Performance is very good, as far as I can tell. These kernels were written and tested on a GTX 1050 Ti. Performance was profiled by NVIDIA Visual Profiler. CUDA is best used for large amounts of small data (e.g., tens of thousands or millions of ints) and simple computational operations. For example, if you just need to generate 10 random ints, then just use [System.Random](https://msdn.microsoft.com/en-us/library/system.random(v=vs.110).aspx).
@@ -41,10 +47,42 @@ GenerateNormalDistributionDP took 3 ms.
 GeneratePoissonDistribution took 3 ms.
 ```
 
-The code used to get these results are in PerformanceMetrics.cs
+The code used to get these results are in PerformanceMetrics.cs.
 
 ### When to use CPU vs GPU
 The CUDA programming model allows easy scaling of performance. However, due to the high latency of the global memory (e.g., GDDR5), the GPU is designed to have dozens of active threads per SM at any time to combat the high latency. The GPU has to be swarmed with threads to ensure the cores are being feed at all times. In other words, smaller work loads (e.g., generating 20 random numbers) will be faster on the CPU than on the GPU. The GPU performs best in large work loads (e.g. generating 50,000 random numbers).
+
+Another thing to consider is that memory must be transferred from the CPU to the GPU and vice versa. Depending on the system, this can be a bottleneck. It is recommended that CPU-to-GPU and GPU-to-CPU tranfers be minimized by minimzing the amount of kernel calls. For example, if you have a matrix of 100 rows and 100 columns and you have to fill it with random numbers, it would be more efficient to generate 10,000 random numbers once and then distribute them on the host (i.e., with the CPU), rather than generating 100 numbers with 100 kernel calls.
+
+## CudaSettings
+
+CudaSettings.Load(): This function is meant to set the directory of the executeable. This is for loading CudaSharperLibrary.dll in CudaSharper.
+
+## Current Functions
+
+### Construction of CudaSharper classes
+
+You have to specify the ID of the CUDA-enabled device to use when creating an object. The ID is simply an int, and starts at 0. You can also call GetCudaDeviceName(int device_id) to get the name of the CUDA device.
+
+### Cuda
+1. SplitArray: Takes one array, and returns a tuple of each half. Supports int, float, long, double.
+2. AddArrays: Takes two arrays, adds them together, and returns the result. Supports int, float, long, double.
+3. MergeArrays: Takes two arrays, and returns a combined array. Supports int, float, long, double.
+
+### CuRand
+Allows generating random numbers with the cuRAND library. These should be used for situations that require a large amount of random numbers; for example, on a GTX 1050 Ti, curand_uniform can generate 50,000 random numbers in about 10-13 milliseconds. These are the cuRAND distributions [(you can view the entire list here)](http://docs.nvidia.com/cuda/curand/device-api-overview.html#distributions):
+
+| cuRAND Distribution | CudaSharper Method | Notes |
+| ------------------- | ------------------ | ----- |
+| curand_uniform      | GenerateUniformDistribution | Uses XORWOW; uses single-precision/FP32. |
+| curand_normal       | GenerateNormalDistribution | Uses XORWOW; uses single-precision/FP32. |
+| curand_log_normal   | GenerateLogNormalDistribution | Uses XORWOW; uses single-precision/FP32. |
+| curand_poisson      | GeneratePoissonDistribution | Not finished; does not preprocess on host. |
+| curand_uniform_double | GenerateUniformDistributionDP | Uses XORWOW; uses double-precision/FP64. |
+| curand_normal_double | GenerateNormalDistributionDP | Uses XORWOW; uses double-precision/FP64. |
+| curand_log_normal_double | GenerateLogNormalDistributionDP | Uses XORWOW; uses double-precision/FP64. |
+
+The functions that generate double (e.g., curand_normal2) and quadruple (e.g., curand_normal4) tuples will be implemented seperately.
 
 ## Examples
 
@@ -76,36 +114,6 @@ var cudaObject = new CuRand(0);
 // Generate 100,000 random numbers using a uniform distribution. The return value is IEnumerable<float>.
 var uniform_rand = cuRand.GenerateUniformDistribution(100_000);
 ```
-
-## CudaSettings
-
-CudaSettings.Load(): This function is meant to set the directory of the executeable. This is for loading CudaSharperLibrary.dll in CudaSharper.
-
-## Current Functions
-
-### Construction of CudaSharper classes
-
-You have to specify the ID of the CUDA-enabled device to use when creating an object. The ID is simply an int, and starts at 0. You can also call GetCudaDeviceName(int device_id) to get the name of the CUDA device.
-
-### Cuda
-1. SplitArray: Takes one array, and returns a tuple of each half. Supports int, float, long, double.
-2. AddArrays: Takes two arrays, adds them together, and returns the result. Supports int, float, long, double.
-3. MergeArrays: Takes two arrays, and returns a combined array. Supports int, float, long, double.
-
-### CuRand
-Allows generating random numbers with the cuRAND library. These should be used for situations that require a large amount of random numbers; for example, on a GTX 1050 Ti, curand_uniform can generate 50,000 random numbers in about 10-13 milliseconds. These are the cuRAND distributions [(you can view the entire list here)](http://docs.nvidia.com/cuda/curand/device-api-overview.html#distributions):
-
-| cuRAND Distribution | CudaSharper Method | Notes |
-| ------------------- | ------------------ | ----- |
-| curand_uniform      | GenerateUniformDistribution | Uses XORWOW; uses single-precision/FP32. |
-| curand_normal       | GenerateNormalDistribution | Uses XORWOW; uses single-precision/FP32. |
-| curand_log_normal   | GenerateLogNormalDistribution | Uses XORWOW; uses single-precision/FP32. |
-| curand_poisson      | GeneratePoissonDistribution | Not finished; does not preprocess on host. |
-| curand_uniform_double | GenerateUniformDistributionDP | Uses XORWOW; uses double-precision/FP64. |
-| curand_normal_double | GenerateNormalDistributionDP | Uses XORWOW; uses double-precision/FP64. |
-| curand_log_normal_double | GenerateLogNormalDistributionDP | Uses XORWOW; uses double-precision/FP64. |
-
-The functions that generate double (e.g., curand_normal2) and quadruple (e.g., curand_normal4) tuples will be implemented seperately.
 
 ## Reference
 
