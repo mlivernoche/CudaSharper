@@ -136,6 +136,10 @@ var uniform_rand = cuRand.GenerateUniformDistribution(100_000);
   - GTX 1050 Ti
 
 ## Changelog
+09/22/2017 - added cuStats.
+
+09/19/2017 - further improved performance of the cuRAND functions.
+
 08/18/2017 - greatly improved the performance of the cuRAND functions.
 
 08/17/2017 - added support for float, long, and double to SplitArray; added MergeArrays.
