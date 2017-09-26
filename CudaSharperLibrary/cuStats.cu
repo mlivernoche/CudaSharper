@@ -6,24 +6,29 @@
 
 #define CUSTATS_BLOCK_MULTIPLIER 32
 
-#define CUSTATS_MIN_SIZE_PER_THREAD 1
+// This has to be a multiple of 2.
+#define CUSTATS_MIN_SIZE_PER_THREAD 2
 
-void cuArray_determine_launch_parameters(unsigned long int* blocks, unsigned long int* threads, unsigned long int* number_per_thread, unsigned long int max_block_size, unsigned long int max_thread_size) {
+void cuStats_determine_launch_parameters(unsigned long int* blocks, unsigned long int* threads, unsigned long int* number_per_thread, unsigned long int max_block_size, unsigned long int max_thread_size) {
 	if (*number_per_thread > CUSTATS_MIN_SIZE_PER_THREAD)
 	{
 		if ((*blocks * 2) <= max_block_size)
 		{
 			*blocks = (*blocks * 2);
-			*number_per_thread = (*number_per_thread / 2) + 1;
-			cuArray_determine_launch_parameters(blocks, threads, number_per_thread, max_block_size, max_thread_size);
+			*number_per_thread = (int)ceil(*number_per_thread / 2) + 1;
+			cuStats_determine_launch_parameters(blocks, threads, number_per_thread, max_block_size, max_thread_size);
 		}
 		else if ((*threads * 2) <= max_thread_size)
 		{
 			*threads = (*threads * 2);
-			*number_per_thread = (*number_per_thread / 2) + 1;
-			cuArray_determine_launch_parameters(blocks, threads, number_per_thread, max_block_size, max_thread_size);
+			*number_per_thread = (int)ceil(*number_per_thread / 2) + 1;
+			cuStats_determine_launch_parameters(blocks, threads, number_per_thread, max_block_size, max_thread_size);
 		}
 		return;
+	}
+	else {
+		// Because this is a multiple of two, blocks * threads * number_per_thread is usually twice the amount needed. Minus one to correct it.
+		*number_per_thread = *number_per_thread - 1;
 	}
 	return;
 }
@@ -52,11 +57,11 @@ template<typename T> double cuStats_standard_deviation(unsigned int device_id, T
 	cudaDeviceProp prop;
 	cudaGetDeviceProperties(&prop, device_id);
 
-	unsigned long int blocks = prop.maxThreadsDim[0] * CUSTATS_BLOCK_MULTIPLIER;
+	unsigned long int blocks = 2;
 	unsigned long int threads = CUSTATS_NUM_OF_THREADS;
 	unsigned long int number_per_thread = data_set_size / (blocks * threads) + 1;
 
-	cuArray_determine_launch_parameters(&blocks, &threads, &number_per_thread, prop.maxThreadsDim[0], prop.maxThreadsPerBlock);
+	cuStats_determine_launch_parameters(&blocks, &threads, &number_per_thread, prop.maxGridSize[0], prop.maxThreadsDim[0]);
 
 	T *h_result = (T *)malloc(data_set_size * sizeof(T));
 	memcpy(h_result, data_set, data_set_size * sizeof(T));
@@ -102,7 +107,7 @@ template<typename T> double cuStats_sample_standard_deviation(unsigned int devic
 	unsigned long int threads = CUSTATS_NUM_OF_THREADS;
 	unsigned long int number_per_thread = data_set_size / (blocks * threads) + 1;
 
-	cuArray_determine_launch_parameters(&blocks, &threads, &number_per_thread, prop.maxThreadsDim[0], prop.maxThreadsPerBlock);
+	cuStats_determine_launch_parameters(&blocks, &threads, &number_per_thread, prop.maxThreadsDim[0], prop.maxThreadsPerBlock);
 
 	T *h_result = (T *)malloc(data_set_size * sizeof(T));
 	memcpy(h_result, data_set, data_set_size * sizeof(T));
