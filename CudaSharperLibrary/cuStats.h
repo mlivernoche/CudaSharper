@@ -5,7 +5,7 @@
 #include "cuda_profiler_api.h"
 #include "device_functions.h"
 
-void cuArray_determine_launch_parameters(unsigned long int* blocks, unsigned long int* threads, unsigned long int* number_per_thread, unsigned long int max_block_size, unsigned long int max_thread_size);
+void cuStats_determine_launch_parameters(unsigned long int* blocks, unsigned long int* threads, unsigned long int* number_per_thread, unsigned long int max_block_size, unsigned long int max_thread_size);
 
 __global__ void cuStats_standard_deviation_kernel(float *std, float *sample, unsigned long int number_per_thread, unsigned long long int data_set_size, double mean);
 __global__ void cuStats_standard_deviation_kernel(double *std, double *sample, unsigned long int number_per_thread, unsigned long long int data_set_size, double mean);
