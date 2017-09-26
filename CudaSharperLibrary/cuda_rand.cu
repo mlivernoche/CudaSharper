@@ -1,567 +1,530 @@
 #pragma once
 #include "cuda_rand.h"
 
-// Should be multiple of 32. These kernels tend to prefer more blocks over threads; however, there has to be enough threads to keep the blocks busy.
-// NOTE: Each kernel has a curandState_t in shared memory per thread. Making this too high can cause high usage of shared memory.
+// sizeof(curandState_t) = 48.
+// Launching 64 threads, 48 * 64 = 3072; 3072 * 32 = 98304 bytes. (32 = block limit).
+// 98304 is the amount of shared memory per block available on Pascal/Maxwell!
+// Using the shared memory for this kernel can halve the execution time (on Pascal).
+// For Kepler, we have to double the amount of threads to achieve 100% occupancy.
 #define CURAND_NUM_OF_THREADS 64
 
 #define CURAND_BLOCK_MULTIPLIER 32
 
-#define CURAND_MIN_SIZE_PER_THREAD 96
+// This has to be a multiple of 2.
+#define CURAND_MIN_SIZE_PER_THREAD 16
 
-void determineBlockAndThreadWorkload(int* blocks, int* threads, int* numberPerThread, int maxBlockSize, int maxThreadSize) {
-	if (*numberPerThread > CURAND_MIN_SIZE_PER_THREAD)
+void cuda_rand_determine_launch_parameters(unsigned long int* blocks, unsigned long int* threads, unsigned long int* number_per_thread, unsigned long int max_block_size, unsigned long int max_thread_size) {
+	if (*number_per_thread > CURAND_MIN_SIZE_PER_THREAD)
 	{
-		if ((*blocks * 2) <= maxBlockSize)
+		if ((*blocks * 2) <= max_block_size)
 		{
 			*blocks = (*blocks * 2);
-			*numberPerThread = (*numberPerThread / 2) + 1;
-			determineBlockAndThreadWorkload(blocks, threads, numberPerThread, maxBlockSize, maxThreadSize);
+			*number_per_thread = (int)ceil(*number_per_thread / 2) + 1;
+			cuda_rand_determine_launch_parameters(blocks, threads, number_per_thread, max_block_size, max_thread_size);
 		}
-		else if ((*threads * 2) <= maxThreadSize)
+		else if ((*threads * 2) <= max_thread_size)
 		{
 			*threads = (*threads * 2);
-			*numberPerThread = (*numberPerThread / 2) + 1;
-			determineBlockAndThreadWorkload(blocks, threads, numberPerThread, maxBlockSize, maxThreadSize);
+			*number_per_thread = (int)ceil(*number_per_thread / 2) + 1;
+			cuda_rand_determine_launch_parameters(blocks, threads, number_per_thread, max_block_size, max_thread_size);
 		}
-		else
-		{
-			return;
-		}
+		return;
+	}
+	else {
+		// Because this is a multiple of two, blocks * threads * number_per_thread is usually twice the amount needed. Minus one to correct it.
+		*number_per_thread = *number_per_thread - 1;
 	}
 	return;
 }
 
-long long int time_seed() {
+long long int cuda_rand_time_seed() {
 	// time(NULL) is not precise enough to produce different sets of random numbers.
 	return std::chrono::system_clock::now().time_since_epoch().count();
 }
 
 extern "C" __declspec(dllexport) void UniformRand(unsigned int device_id, unsigned int amount_of_numbers, float *result) {
-	_uniformRand(device_id, amount_of_numbers, result);
+	cuda_rand_uniform_rand(device_id, amount_of_numbers, result);
 }
 
 extern "C" __declspec(dllexport) void UniformRandDouble(unsigned int device_id, unsigned int amount_of_numbers, double *result) {
-	_uniformRandDouble(device_id, amount_of_numbers, result);
+	cuda_rand_uniform_rand_double(device_id, amount_of_numbers, result);
 }
 
 extern "C" __declspec(dllexport) void NormalRand(unsigned int device_id, unsigned int amount_of_numbers, float *result) {
-	_normalRand(device_id, amount_of_numbers, result);
+	cuda_rand_normal_rand(device_id, amount_of_numbers, result);
 }
 
 extern "C" __declspec(dllexport) void NormalRandDouble(unsigned int device_id, unsigned int amount_of_numbers, double *result) {
-	_normalRandDouble(device_id, amount_of_numbers, result);
+	cuda_rand_normal_rand_double(device_id, amount_of_numbers, result);
 }
 
 extern "C" __declspec(dllexport) void LogNormalRand(unsigned int device_id, unsigned int amount_of_numbers, float *result, float mean, float stddev) {
-	_logNormalRand(device_id, amount_of_numbers, result, mean, stddev);
+	cuda_rand_log_normal_rand(device_id, amount_of_numbers, result, mean, stddev);
 }
 
 extern "C" __declspec(dllexport) void LogNormalRandDouble(unsigned int device_id, unsigned int amount_of_numbers, double *result, float mean, float stddev) {
-	_logNormalRandDouble(device_id, amount_of_numbers, result, mean, stddev);
+	cuda_rand_log_normal_rand_double(device_id, amount_of_numbers, result, mean, stddev);
 }
 
 extern "C" __declspec(dllexport) void PoissonRand(unsigned int device_id, unsigned int amount_of_numbers, int *result, double lambda) {
-	_poissonRand(device_id, amount_of_numbers, result, lambda);
+	cuda_rand_poisson_rand(device_id, amount_of_numbers, result, lambda);
 }
 
-__global__ void init(long long int seed, curandState_t* states) {
-	curand_init(
-		seed,
-		(threadIdx.x + (blockIdx.x * blockDim.x)),
-		0,
-		&states[(threadIdx.x + (blockIdx.x * blockDim.x))]
-	);
-}
+//__global__ void cuda_rand_init(long long int seed, curandState_t* states) {
+//	curand_init(
+//		seed + (threadIdx.x + (blockIdx.x * blockDim.x)),
+//		0,
+//		0,
+//		&states[(threadIdx.x + (blockIdx.x * blockDim.x))]
+//	);
+//}
 
-__global__ void uniform_rand_kernel(curandState_t *states, float *numbers, unsigned int count, unsigned int maximum) {
-	// (threadIdx.x * N) + + offset
-	// N = number of elements
-	// offset = the position of the desired element.
-	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
+__global__ void cuda_rand_uniform_rand_kernel(long long int seed, float *numbers, unsigned int count, unsigned int maximum) {
 	extern __shared__ int smem[];
+	curandState_t *curandStateShared = (curandState_t*)&smem[0];
 
-	// unsigned int sharedMem = (sizeof(int) * 2) + ((sizeof(curandState_t) + sizeof(int)) * CURAND_NUM_OF_THREADS);
-	int *maximumShared = (int*)&smem[0];
-	int *countShared = (int*)&maximumShared[1];
-	curandState_t *curandStateShared = (curandState_t*)&countShared[1];
-
-	if (threadIdx.x == 0) {
-		// Make sure we do not go over this.
-		maximumShared[0] = maximum;
-
-		// This is the ending point in the *numbers array.
-		countShared[0] = count;
-	}
-
-	__syncthreads();
-
-	// The state.
 	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-	curandStateShared[threadIdx.x] = states[xid];
 
-	for (int n = 0; n < countShared[0]; n++) {
-		if ((n + (xid * countShared[0])) < maximumShared[0]) {
-			numbers[(n + (xid * countShared[0]))] = curand_uniform(&curandStateShared[threadIdx.x]);
+	curand_init(seed + xid, 0, 0, &curandStateShared[threadIdx.x]);
+
+	// This is the starting point of the array that this kernel is responsible for.
+	int kernel_block = (xid * count);
+
+	if (count + kernel_block < maximum) {
+		// We can do the entire chunk of numbers in the array.
+		for (int n = 0; n < count; n++) {
+			numbers[n + kernel_block] = curand_uniform(&curandStateShared[threadIdx.x]);
 		}
 	}
-
-	states[xid] = curandStateShared[threadIdx.x];
+	else if (kernel_block < maximum) {
+		// We can't do the entire chunk of numbers in the array, we can still do some of it.
+		for (int n = 0; n < maximum - kernel_block; n++) {
+			numbers[n + kernel_block] = curand_uniform(&curandStateShared[threadIdx.x]);
+		}
+	}
 }
 
-void _uniformRand(unsigned int device_id, unsigned int amount_of_numbers, float *result) {
+void cuda_rand_uniform_rand(unsigned int device_id, unsigned int amount_of_numbers, float *result) {
 	cudaError_t gpu_device = cudaSetDevice(device_id);
 
 	cudaDeviceProp prop;
 	cudaGetDeviceProperties(&prop, device_id);
 
 	// kernel prefers blocks over threads, but does not like only blocks and no threads.
-	int threads = CURAND_NUM_OF_THREADS;
-	int blocks = prop.multiProcessorCount * CURAND_BLOCK_MULTIPLIER;
-	int numberPerThread = (amount_of_numbers / (blocks * CURAND_NUM_OF_THREADS)) + 1;
+	unsigned long int threads = CURAND_NUM_OF_THREADS;
+	unsigned long int blocks = 2;
+
+	// sizeof(curandState_t) = 48.
+	// Launching 64 threads, 48 * 64 = 3072; 3072 * 32 = 98304 bytes. (32 = block limit).
+	// 98304 is the amount of shared memory per block available on Pascal/Maxwell!
+	// Using the shared memory for this kernel can halve the execution time (on Pascal).
+	// For Kepler, we have to double the amount of threads to achieve 100% occupancy.
+	if (prop.major == 3 && prop.minor == 5) {
+		threads = threads * 2;
+	}
+
+	// Figure out how many numbers each thread will have to generate.
+	unsigned long int numberPerThread = (amount_of_numbers / (blocks * threads)) + 1;
 
 	// See if we can increase the block size even more.
-	determineBlockAndThreadWorkload(&blocks, &threads, &numberPerThread, prop.maxThreadsDim[0], prop.maxThreadsPerBlock);
+	// Regarding the max threads, see above.
+	cuda_rand_determine_launch_parameters(&blocks, &threads, &numberPerThread, prop.maxGridSize[0], prop.maxThreadsDim[0]);
 
-	curandState_t *states;
 	float *d_nums;
-
-	cudaMalloc(&states, blocks * threads * sizeof(curandState_t));
 	cudaMalloc(&d_nums, amount_of_numbers * sizeof(float));
-
-	init << <blocks, threads >> > (time_seed(), states);
 
 	// this kernel loves bandwidth, so distributing resources should be based on used shared memory.
 	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
-	size_t sharedMem = (sizeof(int) * 2) + (sizeof(curandState_t) * threads);
-	uniform_rand_kernel << <blocks, threads, sharedMem >> > (states, d_nums, numberPerThread, amount_of_numbers);
+	size_t sharedMem = sizeof(curandState_t) * threads;
+	cuda_rand_uniform_rand_kernel << <blocks, threads, sharedMem >> > (cuda_rand_time_seed(), d_nums, numberPerThread, amount_of_numbers);
 
 	cudaMemcpy(result, d_nums, amount_of_numbers * sizeof(float), cudaMemcpyDeviceToHost);
 
-	cudaFree(states);
 	cudaFree(d_nums);
 }
 
-__global__ void uniform_rand_double_kernel(curandState_t *states, double *numbers, unsigned int count, unsigned int maximum) {
-	// (threadIdx.x * N) + + offset
-	// N = number of elements
-	// offset = the position of the desired element.
-	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
+__global__ void cuda_rand_uniform_rand_double_kernel(long long int seed, double *numbers, unsigned int count, unsigned int maximum) {
 	extern __shared__ int smem[];
+	curandState_t *curandStateShared = (curandState_t*)&smem[0];
 
-	// unsigned int sharedMem = (sizeof(int) * 2) + ((sizeof(curandState_t) + sizeof(int)) * CURAND_NUM_OF_THREADS);
-	int *maximumShared = (int*)&smem[0];
-	int *countShared = (int*)&maximumShared[1];
-	curandState_t *curandStateShared = (curandState_t*)&countShared[1];
-
-	if (threadIdx.x == 0) {
-		// Make sure we do not go over this.
-		maximumShared[0] = maximum;
-
-		// This is the ending point in the *numbers array.
-		countShared[0] = count;
-	}
-
-	__syncthreads();
-
-	// The state.
 	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-	curandStateShared[threadIdx.x] = states[xid];
 
-	for (int n = 0; n < countShared[0]; n++) {
-		if ((n + (xid * countShared[0])) < maximumShared[0]) {
-			numbers[(n + (xid * countShared[0]))] = curand_uniform_double(&curandStateShared[threadIdx.x]);
+	curand_init(seed + xid, 0, 0, &curandStateShared[threadIdx.x]);
+
+	// This is the starting point of the array that this kernel is responsible for.
+	int kernel_block = (xid * count);
+
+	if (count + kernel_block < maximum) {
+		// We can do the entire chunk of numbers in the array.
+		for (int n = 0; n < count; n++) {
+			numbers[n + kernel_block] = curand_uniform_double(&curandStateShared[threadIdx.x]);
 		}
 	}
-
-	states[xid] = curandStateShared[threadIdx.x];
+	else if (kernel_block < maximum) {
+		// We can't do the entire chunk of numbers in the array, we can still do some of it.
+		for (int n = 0; n < maximum - kernel_block; n++) {
+			numbers[n + kernel_block] = curand_uniform_double(&curandStateShared[threadIdx.x]);
+		}
+	}
 }
 
-void _uniformRandDouble(unsigned int device_id, unsigned int amount_of_numbers, double *result) {
+void cuda_rand_uniform_rand_double(unsigned int device_id, unsigned int amount_of_numbers, double *result) {
 	cudaError_t gpu_device = cudaSetDevice(device_id);
 
 	cudaDeviceProp prop;
 	cudaGetDeviceProperties(&prop, device_id);
 
 	// kernel prefers blocks over threads, but does not like only blocks and no threads.
-	int threads = CURAND_NUM_OF_THREADS;
-	int blocks = prop.multiProcessorCount * CURAND_BLOCK_MULTIPLIER;
-	int numberPerThread = (amount_of_numbers / (blocks * CURAND_NUM_OF_THREADS)) + 1;
+	unsigned long int threads = CURAND_NUM_OF_THREADS;
+	unsigned long int blocks = 2;
+
+	// sizeof(curandState_t) = 48.
+	// Launching 64 threads, 48 * 64 = 3072; 3072 * 32 = 98304 bytes. (32 = block limit).
+	// 98304 is the amount of shared memory per block available on Pascal/Maxwell!
+	// Using the shared memory for this kernel can halve the execution time (on Pascal).
+	// For Kepler, we have to double the amount of threads to achieve 100% occupancy.
+	if (prop.major == 3 && prop.minor == 5) {
+		threads = threads * 2;
+	}
+
+	// Figure out how many numbers each thread will have to generate.
+	unsigned long int numberPerThread = (amount_of_numbers / (blocks * threads)) + 1;
 
 	// See if we can increase the block size even more.
-	determineBlockAndThreadWorkload(&blocks, &threads, &numberPerThread, prop.maxThreadsDim[0], prop.maxThreadsPerBlock);
+	// Regarding the max threads, see above.
+	cuda_rand_determine_launch_parameters(&blocks, &threads, &numberPerThread, prop.maxGridSize[0], prop.maxThreadsDim[0]);
 
-	curandState_t *states;
 	double *d_nums;
-
-	cudaMalloc(&states, blocks * threads * sizeof(curandState_t));
 	cudaMalloc(&d_nums, amount_of_numbers * sizeof(double));
 
-	init << <blocks, threads >> > (time_seed(), states);
-
-	// this kernel loves bandwidth, so distributing resources should be based on used shared memory.
-	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
-	size_t sharedMem = (sizeof(int) * 2) + (sizeof(curandState_t) * threads);
-	uniform_rand_double_kernel << <blocks, threads, sharedMem >> > (states, d_nums, numberPerThread, amount_of_numbers);
+	size_t sharedMem = sizeof(curandState_t) * threads;
+	cuda_rand_uniform_rand_double_kernel << <blocks, threads, sharedMem >> >(cuda_rand_time_seed(), d_nums, numberPerThread, amount_of_numbers);
 
 	cudaMemcpy(result, d_nums, amount_of_numbers * sizeof(double), cudaMemcpyDeviceToHost);
 
-	cudaFree(states);
 	cudaFree(d_nums);
 }
 
-__global__ void normal_rand_kernel(curandState_t *states, float *numbers, unsigned int count, unsigned int maximum) {
+__global__ void cuda_rand_normal_rand_kernel(long long int seed, float *numbers, unsigned int count, unsigned int maximum) {
 	// (threadIdx.x * N) + + offset
 	// N = number of elements
 	// offset = the position of the desired element.
 	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
 	extern __shared__ int smem[];
-
-	// unsigned int sharedMem = (sizeof(int) * 2) + ((sizeof(curandState_t) + sizeof(int)) * CURAND_NUM_OF_THREADS);
-	int *maximumShared = (int*)&smem[0];
-	int *countShared = (int*)&maximumShared[1];
-	curandState_t *curandStateShared = (curandState_t*)&countShared[1];
-
-	if (threadIdx.x == 0) {
-		// Make sure we do not go over this.
-		maximumShared[0] = maximum;
-
-		// This is the ending point in the *numbers array.
-		countShared[0] = count;
-	}
-
-	__syncthreads();
+	curandState_t *curandStateShared = (curandState_t*)&smem[0];
 
 	// The state.
 	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-	curandStateShared[threadIdx.x] = states[xid];
+	
+	curand_init(seed + xid, 0, 0, &curandStateShared[threadIdx.x]);
 
-	for (int n = 0; n < countShared[0]; n++) {
-		if ((n + (xid * countShared[0])) < maximumShared[0]) {
-			numbers[(n + (xid * countShared[0]))] = curand_normal(&curandStateShared[threadIdx.x]);
+	// This is the starting point of the array that this kernel is responsible for.
+	int kernel_block = (xid * count);
+
+	if (count + kernel_block < maximum) {
+		// We can do the entire chunk of numbers in the array.
+		for (int n = 0; n < count; n++) {
+			numbers[n + kernel_block] = curand_normal(&curandStateShared[threadIdx.x]);
 		}
 	}
-
-	states[xid] = curandStateShared[threadIdx.x];
+	else if (kernel_block < maximum) {
+		// We can't do the entire chunk of numbers in the array, we can still do some of it.
+		for (int n = 0; n < maximum - kernel_block; n++) {
+			numbers[n + kernel_block] = curand_normal(&curandStateShared[threadIdx.x]);
+		}
+	}
 }
 
-void _normalRand(unsigned int device_id, unsigned int amount_of_numbers, float *result) {
+void cuda_rand_normal_rand(unsigned int device_id, unsigned int amount_of_numbers, float *result) {
 	cudaError_t gpu_device = cudaSetDevice(device_id);
 
 	cudaDeviceProp prop;
 	cudaGetDeviceProperties(&prop, device_id);
 
 	// kernel prefers blocks over threads, but does not like only blocks and no threads.
-	int threads = CURAND_NUM_OF_THREADS;
-	int blocks = prop.multiProcessorCount * CURAND_BLOCK_MULTIPLIER;
-	int numberPerThread = (amount_of_numbers / (blocks * CURAND_NUM_OF_THREADS)) + 1;
+	unsigned long int threads = CURAND_NUM_OF_THREADS;
+	unsigned long int blocks = 2;
+
+	// sizeof(curandState_t) = 48.
+	// Launching 64 threads, 48 * 64 = 3072; 3072 * 32 = 98304 bytes. (32 = block limit).
+	// 98304 is the amount of shared memory per block available on Pascal/Maxwell!
+	// Using the shared memory for this kernel can halve the execution time (on Pascal).
+	// For Kepler, we have to double the amount of threads to achieve 100% occupancy.
+	if (prop.major == 3 && prop.minor == 5) {
+		threads = threads * 2;
+	}
+
+	// Figure out how many numbers each thread will have to generate.
+	unsigned long int numberPerThread = (amount_of_numbers / (blocks * threads)) + 1;
 
 	// See if we can increase the block size even more.
-	determineBlockAndThreadWorkload(&blocks, &threads, &numberPerThread, prop.maxThreadsDim[0], prop.maxThreadsPerBlock);
+	// Regarding the max threads, see above.
+	cuda_rand_determine_launch_parameters(&blocks, &threads, &numberPerThread, prop.maxGridSize[0], prop.maxThreadsDim[0]);
 
-	curandState_t *states;
 	float *d_nums;
-
-	cudaMalloc(&states, blocks * threads * sizeof(curandState_t));
 	cudaMalloc(&d_nums, amount_of_numbers * sizeof(float));
-
-	init << <blocks, threads >> > (time_seed(), states);
 
 	// this kernel loves bandwidth, so distributing resources should be based on used shared memory.
 	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
-	size_t sharedMem = (sizeof(int) * 2) + (sizeof(curandState_t) * threads);
-	normal_rand_kernel << <blocks, threads, sharedMem >> >(states, d_nums, numberPerThread, amount_of_numbers);
+	size_t sharedMem = sizeof(curandState_t) * threads;
+	cuda_rand_normal_rand_kernel << <blocks, threads, sharedMem >> >(cuda_rand_time_seed(), d_nums, numberPerThread, amount_of_numbers);
 
 	cudaMemcpy(result, d_nums, amount_of_numbers * sizeof(float), cudaMemcpyDeviceToHost);
 
-	cudaFree(states);
 	cudaFree(d_nums);
 }
 
-__global__ void normal_rand_double_kernel(curandState_t *states, double *numbers, unsigned int count, unsigned int maximum) {
-	// (threadIdx.x * N) + + offset
-	// N = number of elements
-	// offset = the position of the desired element.
-	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
+__global__ void cuda_rand_normal_rand_double_kernel(long long int seed, double *numbers, unsigned int count, unsigned int maximum) {
 	extern __shared__ int smem[];
+	curandState_t *curandStateShared = (curandState_t*)&smem[0];
 
-	// unsigned int sharedMem = (sizeof(int) * 2) + ((sizeof(curandState_t) + sizeof(int)) * CURAND_NUM_OF_THREADS);
-	int *maximumShared = (int*)&smem[0];
-	int *countShared = (int*)&maximumShared[1];
-	curandState_t *curandStateShared = (curandState_t*)&countShared[1];
-
-	if (threadIdx.x == 0) {
-		// Make sure we do not go over this.
-		maximumShared[0] = maximum;
-
-		// This is the ending point in the *numbers array.
-		countShared[0] = count;
-	}
-
-	__syncthreads();
-
-	// The state.
 	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-	curandStateShared[threadIdx.x] = states[xid];
 
-	for (int n = 0; n < countShared[0]; n++) {
-		if ((n + (xid * countShared[0])) < maximumShared[0]) {
-			numbers[(n + (xid * countShared[0]))] = curand_normal_double(&curandStateShared[threadIdx.x]);
+	curand_init(seed + xid, 0, 0, &curandStateShared[threadIdx.x]);
+
+	// This is the starting point of the array that this kernel is responsible for.
+	int kernel_block = (xid * count);
+
+	if (count + kernel_block < maximum) {
+		// We can do the entire chunk of numbers in the array.
+		for (int n = 0; n < count; n++) {
+			numbers[n + kernel_block] = curand_normal_double(&curandStateShared[threadIdx.x]);
 		}
 	}
-
-	states[xid] = curandStateShared[threadIdx.x];
+	else if (kernel_block < maximum) {
+		// We can't do the entire chunk of numbers in the array, we can still do some of it.
+		for (int n = 0; n < maximum - kernel_block; n++) {
+			numbers[n + kernel_block] = curand_normal_double(&curandStateShared[threadIdx.x]);
+		}
+	}
 }
 
-void _normalRandDouble(unsigned int device_id, unsigned int amount_of_numbers, double *result) {
+void cuda_rand_normal_rand_double(unsigned int device_id, unsigned int amount_of_numbers, double *result) {
 	cudaError_t gpu_device = cudaSetDevice(device_id);
 
 	cudaDeviceProp prop;
 	cudaGetDeviceProperties(&prop, device_id);
 
 	// kernel prefers blocks over threads, but does not like only blocks and no threads.
-	int threads = CURAND_NUM_OF_THREADS;
-	int blocks = prop.multiProcessorCount * CURAND_BLOCK_MULTIPLIER;
-	int numberPerThread = (amount_of_numbers / (blocks * CURAND_NUM_OF_THREADS)) + 1;
+	unsigned long int threads = CURAND_NUM_OF_THREADS;
+	unsigned long int blocks = 2;
+
+	// sizeof(curandState_t) = 48.
+	// Launching 64 threads, 48 * 64 = 3072; 3072 * 32 = 98304 bytes. (32 = block limit).
+	// 98304 is the amount of shared memory per block available on Pascal/Maxwell!
+	// Using the shared memory for this kernel can halve the execution time (on Pascal).
+	// For Kepler, we have to double the amount of threads to achieve 100% occupancy.
+	if (prop.major == 3 && prop.minor == 5) {
+		threads = threads * 2;
+	}
+
+	// Figure out how many numbers each thread will have to generate.
+	unsigned long int numberPerThread = (amount_of_numbers / (blocks * threads)) + 1;
 
 	// See if we can increase the block size even more.
-	determineBlockAndThreadWorkload(&blocks, &threads, &numberPerThread, prop.maxThreadsDim[0], prop.maxThreadsPerBlock);
+	// Regarding the max threads, see above.
+	cuda_rand_determine_launch_parameters(&blocks, &threads, &numberPerThread, prop.maxGridSize[0], prop.maxThreadsDim[0]);
 
-	curandState_t *states;
 	double *d_nums;
-
-	cudaMalloc(&states, blocks * threads * sizeof(curandState_t));
 	cudaMalloc(&d_nums, amount_of_numbers * sizeof(double));
-
-	init << <blocks, threads >> > (time_seed(), states);
 
 	// this kernel loves bandwidth, so distributing resources should be based on used shared memory.
 	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
-	size_t sharedMem = (sizeof(int) * 2) + (sizeof(curandState_t) * threads);
-	normal_rand_double_kernel << <blocks, threads, sharedMem >> >(states, d_nums, numberPerThread, amount_of_numbers);
+	size_t sharedMem = sizeof(curandState_t) * threads;
+	cuda_rand_normal_rand_double_kernel << <blocks, threads, sharedMem >> >(cuda_rand_time_seed(), d_nums, numberPerThread, amount_of_numbers);
 
 	cudaMemcpy(result, d_nums, amount_of_numbers * sizeof(double), cudaMemcpyDeviceToHost);
 
-	cudaFree(states);
 	cudaFree(d_nums);
 }
 
-__global__ void log_normal_rand_kernel(curandState_t *states, float *numbers, unsigned int count, unsigned int maximum, float mean, float stddev) {
-	// (threadIdx.x * N) + + offset
-	// N = number of elements
-	// offset = the position of the desired element.
-	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
+__global__ void cuda_rand_log_normal_rand_kernel(long long int seed, float *numbers, unsigned int count, unsigned int maximum, float mean, float stddev) {
 	extern __shared__ int smem[];
+	curandState_t *curandStateShared = (curandState_t*)&smem[0];
 
-	// unsigned int sharedMem = (sizeof(int) * 2) + (sizeof(float) * 2) + ((sizeof(curandState_t) + sizeof(int)) * CURAND_NUM_OF_THREADS);
-	int *maximumShared = (int*)&smem[0];
-	int *countShared = (int*)&maximumShared[1];
-	float *meanShared = (float*)&countShared[1];
-	float *stdDevShared = (float*)&meanShared[1];
-	curandState_t *curandStateShared = (curandState_t*)&stdDevShared[1];
-
-	if (threadIdx.x == 0) {
-		// Make sure we do not go over this.
-		maximumShared[0] = maximum;
-
-		// This is the ending point in the *numbers array.
-		countShared[0] = count;
-
-		// The mean.
-		meanShared[0] = mean;
-
-		//The standard deviation.
-		stdDevShared[0] = stddev;
-	}
-
-	__syncthreads();
-
-	// The state.
 	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-	curandStateShared[threadIdx.x] = states[xid];
 
-	for (int n = 0; n < countShared[0]; n++) {
-		if ((n + (xid * countShared[0])) < maximumShared[0]) {
-			numbers[(n + (xid * countShared[0]))] = curand_log_normal(&curandStateShared[threadIdx.x], meanShared[0], stdDevShared[0]);
+	curand_init(seed + xid, 0, 0, &curandStateShared[threadIdx.x]);
+
+	// This is the starting point of the array that this kernel is responsible for.
+	int kernel_block = (xid * count);
+
+	if (count + kernel_block < maximum) {
+		// We can do the entire chunk of numbers in the array.
+		for (int n = 0; n < count; n++) {
+			numbers[n + kernel_block] = curand_log_normal(&curandStateShared[threadIdx.x], mean, stddev);
 		}
 	}
-
-	states[xid] = curandStateShared[threadIdx.x];
+	else if (kernel_block < maximum) {
+		// We can't do the entire chunk of numbers in the array, we can still do some of it.
+		for (int n = 0; n < maximum - kernel_block; n++) {
+			numbers[n + kernel_block] = curand_log_normal(&curandStateShared[threadIdx.x], mean, stddev);
+		}
+	}
 }
 
-void _logNormalRand(unsigned int device_id, unsigned int amount_of_numbers, float *result, float mean, float stddev) {
+void cuda_rand_log_normal_rand(unsigned int device_id, unsigned int amount_of_numbers, float *result, float mean, float stddev) {
 	cudaError_t gpu_device = cudaSetDevice(device_id);
 
 	cudaDeviceProp prop;
 	cudaGetDeviceProperties(&prop, device_id);
 
 	// kernel prefers blocks over threads, but does not like only blocks and no threads.
-	int threads = CURAND_NUM_OF_THREADS;
-	int blocks = prop.multiProcessorCount * CURAND_BLOCK_MULTIPLIER;
-	int numberPerThread = (amount_of_numbers / (blocks * CURAND_NUM_OF_THREADS)) + 1;
+	unsigned long int threads = CURAND_NUM_OF_THREADS;
+	unsigned long int blocks = 2;
+
+	// sizeof(curandState_t) = 48.
+	// Launching 64 threads, 48 * 64 = 3072; 3072 * 32 = 98304 bytes. (32 = block limit).
+	// 98304 is the amount of shared memory per block available on Pascal/Maxwell!
+	// Using the shared memory for this kernel can halve the execution time (on Pascal).
+	// For Kepler, we have to double the amount of threads to achieve 100% occupancy.
+	if (prop.major == 3 && prop.minor == 5) {
+		threads = threads * 2;
+	}
+
+	// Figure out how many numbers each thread will have to generate.
+	unsigned long int numberPerThread = (amount_of_numbers / (blocks * threads)) + 1;
 
 	// See if we can increase the block size even more.
-	determineBlockAndThreadWorkload(&blocks, &threads, &numberPerThread, prop.maxThreadsDim[0], prop.maxThreadsPerBlock);
+	// Regarding the max threads, see above.
+	cuda_rand_determine_launch_parameters(&blocks, &threads, &numberPerThread, prop.maxGridSize[0], prop.maxThreadsDim[0]);
 
-	curandState_t *states;
 	float *d_nums;
-
-	cudaMalloc(&states, blocks * threads * sizeof(curandState_t));
 	cudaMalloc(&d_nums, amount_of_numbers * sizeof(float));
-
-	init << <blocks, threads >> > (time_seed(), states);
 
 	// this kernel loves bandwidth, so distributing resources should be based on used shared memory.
 	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
-	size_t sharedMem = (sizeof(int) * 2) + (sizeof(float) * 2) + (sizeof(curandState_t) * threads);
-	log_normal_rand_kernel << <blocks, threads, sharedMem >> >(states, d_nums, numberPerThread, amount_of_numbers, mean, stddev);
+	size_t sharedMem = sizeof(curandState_t) * threads;
+	cuda_rand_log_normal_rand_kernel << <blocks, threads, sharedMem >> >(cuda_rand_time_seed(), d_nums, numberPerThread, amount_of_numbers, mean, stddev);
 
 	cudaMemcpy(result, d_nums, amount_of_numbers * sizeof(float), cudaMemcpyDeviceToHost);
 
-	cudaFree(states);
 	cudaFree(d_nums);
 }
 
-__global__ void log_normal_rand_double_kernel(curandState_t *states, double *numbers, unsigned int count, unsigned int maximum, float mean, float stddev) {
-	// (threadIdx.x * N) + + offset
-	// N = number of elements
-	// offset = the position of the desired element.
-	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
+__global__ void cuda_rand_log_normal_rand_double_kernel(long long int seed, double *numbers, unsigned int count, unsigned int maximum, double mean, double stddev) {
 	extern __shared__ int smem[];
+	curandState_t *curandStateShared = (curandState_t*)&smem[0];
 
-	// unsigned int sharedMem = (sizeof(int) * 2) + (sizeof(float) * 2) + ((sizeof(curandState_t) + sizeof(int)) * CURAND_NUM_OF_THREADS);
-	int *maximumShared = (int*)&smem[0];
-	int *countShared = (int*)&maximumShared[1];
-	float *meanShared = (float*)&countShared[1];
-	float *stdDevShared = (float*)&meanShared[1];
-	curandState_t *curandStateShared = (curandState_t*)&stdDevShared[1];
-
-	if (threadIdx.x == 0) {
-		// Make sure we do not go over this.
-		maximumShared[0] = maximum;
-
-		// This is the ending point in the *numbers array.
-		countShared[0] = count;
-
-		// The mean.
-		meanShared[0] = mean;
-
-		//The standard deviation.
-		stdDevShared[0] = stddev;
-	}
-
-	__syncthreads();
-
-	// The state.
 	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-	curandStateShared[threadIdx.x] = states[xid];
 
-	for (int n = 0; n < countShared[0]; n++) {
-		if ((n + (xid * countShared[0])) < maximumShared[0]) {
-			numbers[(n + (xid * countShared[0]))] = curand_log_normal_double(&curandStateShared[threadIdx.x], meanShared[0], stdDevShared[0]);
+	curand_init(seed + xid, 0, 0, &curandStateShared[threadIdx.x]);
+
+	// This is the starting point of the array that this kernel is responsible for.
+	int kernel_block = (xid * count);
+
+	if (count + kernel_block < maximum) {
+		// We can do the entire chunk of numbers in the array.
+		for (int n = 0; n < count; n++) {
+			numbers[n + kernel_block] = curand_log_normal_double(&curandStateShared[threadIdx.x], mean, stddev);
 		}
 	}
-
-	states[xid] = curandStateShared[threadIdx.x];
+	else if (kernel_block < maximum) {
+		// We can't do the entire chunk of numbers in the array, we can still do some of it.
+		for (int n = 0; n < maximum - kernel_block; n++) {
+			numbers[n + kernel_block] = curand_log_normal_double(&curandStateShared[threadIdx.x], mean, stddev);
+		}
+	}
 }
 
-void _logNormalRandDouble(unsigned int device_id, unsigned int amount_of_numbers, double *result, float mean, float stddev) {
+void cuda_rand_log_normal_rand_double(unsigned int device_id, unsigned int amount_of_numbers, double *result, double mean, double stddev) {
 	cudaError_t gpu_device = cudaSetDevice(device_id);
 
 	cudaDeviceProp prop;
 	cudaGetDeviceProperties(&prop, device_id);
 
 	// kernel prefers blocks over threads, but does not like only blocks and no threads.
-	int threads = CURAND_NUM_OF_THREADS;
-	int blocks = prop.multiProcessorCount * CURAND_BLOCK_MULTIPLIER;
-	int numberPerThread = (amount_of_numbers / (blocks * CURAND_NUM_OF_THREADS)) + 1;
+	unsigned long int threads = CURAND_NUM_OF_THREADS;
+	unsigned long int blocks = 2;
+
+	// sizeof(curandState_t) = 48.
+	// Launching 64 threads, 48 * 64 = 3072; 3072 * 32 = 98304 bytes. (32 = block limit).
+	// 98304 is the amount of shared memory per block available on Pascal/Maxwell!
+	// Using the shared memory for this kernel can halve the execution time (on Pascal).
+	// For Kepler, we have to double the amount of threads to achieve 100% occupancy.
+	if (prop.major == 3 && prop.minor == 5) {
+		threads = threads * 2;
+	}
+
+	// Figure out how many numbers each thread will have to generate.
+	unsigned long int numberPerThread = (amount_of_numbers / (blocks * threads)) + 1;
 
 	// See if we can increase the block size even more.
-	determineBlockAndThreadWorkload(&blocks, &threads, &numberPerThread, prop.maxThreadsDim[0], prop.maxThreadsPerBlock);
+	// Regarding the max threads, see above.
+	cuda_rand_determine_launch_parameters(&blocks, &threads, &numberPerThread, prop.maxGridSize[0], prop.maxThreadsDim[0]);
 
-	curandState_t *states;
 	double *d_nums;
-
-	cudaMalloc(&states, blocks * threads * sizeof(curandState_t));
 	cudaMalloc(&d_nums, amount_of_numbers * sizeof(double));
-
-	init << <blocks, threads >> > (time_seed(), states);
 
 	// this kernel loves bandwidth, so distributing resources should be based on used shared memory.
 	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
-	size_t sharedMem = (sizeof(int) * 2) + (sizeof(float) * 2) + (sizeof(curandState_t) * threads);
-	log_normal_rand_double_kernel << <blocks, threads, sharedMem >> >(states, d_nums, numberPerThread, amount_of_numbers, mean, stddev);
+	size_t sharedMem = sizeof(curandState_t) * threads;
+	cuda_rand_log_normal_rand_double_kernel << <blocks, threads, sharedMem >> >(cuda_rand_time_seed(), d_nums, numberPerThread, amount_of_numbers, mean, stddev);
 
 	cudaMemcpy(result, d_nums, amount_of_numbers * sizeof(double), cudaMemcpyDeviceToHost);
 
-	cudaFree(states);
 	cudaFree(d_nums);
 }
 
-__global__ void poisson_rand_kernel(curandState_t *states, int *numbers, unsigned int count, unsigned int maximum, double lambda) {
+__global__ void cuda_rand_poisson_rand_kernel(long long int seed, int *numbers, unsigned int count, unsigned int maximum, double lambda) {
 	extern __shared__ int smem[];
+	curandState_t *curandStateShared = (curandState_t*)&smem[0];
 
-	// unsigned int sharedMem = (sizeof(int) * 2) + sizeof(double) + ((sizeof(curandState_t) + sizeof(int) + sizeof(int)) * CURAND_NUM_OF_THREADS);
-	int *maximumShared = (int*)&smem[0];
-	int *countShared = (int*)&maximumShared[1];
-	double *lambdaShared = (double*)&countShared[1];
-	curandState_t *curandStateShared = (curandState_t*)&lambdaShared[1];
-
-	if (threadIdx.x == 0) {
-		// Make sure we do not go over this.
-		maximumShared[0] = maximum;
-
-		// This is the ending point in the *numbers array.
-		countShared[0] = count;
-
-		// The lambda.
-		lambdaShared[0] = lambda;
-	}
-
-	__syncthreads();
-
-	// The state.
 	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-	curandStateShared[threadIdx.x] = states[xid];
 
-	for (int n = 0; n < countShared[0]; n++) {
-		if ((n + (xid * countShared[0])) < maximumShared[0]) {
-			numbers[(n + (xid * countShared[0]))] = curand_poisson(&curandStateShared[threadIdx.x], lambdaShared[0]);
+	curand_init(seed + xid, 0, 0, &curandStateShared[threadIdx.x]);
+
+	// This is the starting point of the array that this kernel is responsible for.
+	int kernel_block = (xid * count);
+
+	if (count + kernel_block < maximum) {
+		// We can do the entire chunk of numbers in the array.
+		for (int n = 0; n < count; n++) {
+			numbers[n + kernel_block] = curand_poisson(&curandStateShared[threadIdx.x], lambda);
 		}
 	}
-
-	states[xid] = curandStateShared[threadIdx.x];
+	else if (kernel_block < maximum) {
+		// We can't do the entire chunk of numbers in the array, we can still do some of it.
+		for (int n = 0; n < maximum - kernel_block; n++) {
+			numbers[n + kernel_block] = curand_poisson(&curandStateShared[threadIdx.x], lambda);
+		}
+	}
 }
 
-void _poissonRand(unsigned int device_id, unsigned int amount_of_numbers, int *result, double lambda) {
+void cuda_rand_poisson_rand(unsigned int device_id, unsigned int amount_of_numbers, int *result, double lambda) {
 	cudaError_t gpu_device = cudaSetDevice(device_id);
 
 	cudaDeviceProp prop;
 	cudaGetDeviceProperties(&prop, device_id);
 
 	// kernel prefers blocks over threads, but does not like only blocks and no threads.
-	int threads = CURAND_NUM_OF_THREADS;
-	int blocks = prop.multiProcessorCount * CURAND_BLOCK_MULTIPLIER;
-	int numberPerThread = (amount_of_numbers / (blocks * CURAND_NUM_OF_THREADS)) + 1;
+	unsigned long int threads = CURAND_NUM_OF_THREADS;
+	unsigned long int blocks = 2;
+
+	// sizeof(curandState_t) = 48.
+	// Launching 64 threads, 48 * 64 = 3072; 3072 * 32 = 98304 bytes. (32 = block limit).
+	// 98304 is the amount of shared memory per block available on Pascal/Maxwell!
+	// Using the shared memory for this kernel can halve the execution time (on Pascal).
+	// For Kepler, we have to double the amount of threads to achieve 100% occupancy.
+	if (prop.major == 3 && prop.minor == 5) {
+		threads = threads * 2;
+	}
+
+	// Figure out how many numbers each thread will have to generate.
+	unsigned long int numberPerThread = (amount_of_numbers / (blocks * threads)) + 1;
 
 	// See if we can increase the block size even more.
-	determineBlockAndThreadWorkload(&blocks, &threads, &numberPerThread, prop.maxThreadsDim[0], prop.maxThreadsPerBlock);
+	// Regarding the max threads, see above.
+	cuda_rand_determine_launch_parameters(&blocks, &threads, &numberPerThread, prop.maxGridSize[0], prop.maxThreadsDim[0]);
 
-	curandState_t *states;
 	int *d_nums;
-
-	cudaMalloc(&states, blocks * threads * sizeof(curandState_t));
 	cudaMalloc(&d_nums, amount_of_numbers * sizeof(int));
 
-	init << <blocks, threads >> > (time_seed(), states);
-
 	// this kernel loves bandwidth, so distributing resources should be based on used shared memory.
-	// 0 = int = offset (the start of the loop), 1 = int = the end of the loop
-	size_t sharedMem = (sizeof(int) * 2) + sizeof(double) + (sizeof(curandState_t) * threads);
-	poisson_rand_kernel << <blocks, threads, sharedMem >> > (states, d_nums, numberPerThread, amount_of_numbers, lambda);
+	size_t sharedMem = sizeof(curandState_t) * threads;
+	cuda_rand_poisson_rand_kernel << <blocks, threads, sharedMem >> > (cuda_rand_time_seed(), d_nums, numberPerThread, amount_of_numbers, lambda);
 
 	cudaMemcpy(result, d_nums, amount_of_numbers * sizeof(int), cudaMemcpyDeviceToHost);
 
-	cudaFree(states);
 	cudaFree(d_nums);
 }
