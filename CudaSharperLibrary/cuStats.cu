@@ -28,17 +28,21 @@ void cuArray_determine_launch_parameters(unsigned long int* blocks, unsigned lon
 	return;
 }
 
-__global__ void cuStats_standard_deviation_kernel(float *std, float *sample, unsigned long int number_per_thread, float mean) {
+__global__ void cuStats_standard_deviation_kernel(float *std, float *sample, unsigned long int number_per_thread, unsigned long long int data_set_size, double mean) {
 	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-	for (int i = 0; i < number_per_thread; i++) {
-		std[xid + i] = powf(sample[xid + i] - mean, 2);
+	if (xid + number_per_thread < data_set_size) {
+		for (int i = 0; i < number_per_thread; i++) {
+			std[xid + i] = powf(sample[xid + i] - mean, 2);
+		}
 	}
 }
 
-__global__ void cuStats_standard_deviation_kernel(double *std, double *sample, unsigned long int number_per_thread, double mean) {
+__global__ void cuStats_standard_deviation_kernel(double *std, double *sample, unsigned long int number_per_thread, unsigned long long int data_set_size, double mean) {
 	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-	for (int i = 0; i < number_per_thread; i++) {
-		std[xid + i] = pow(sample[xid + i] - mean, 2);
+	if (xid + number_per_thread < data_set_size) {
+		for (int i = 0; i < number_per_thread; i++) {
+			std[xid + i] = pow(sample[xid + i] - mean, 2);
+		}
 	}
 }
 
@@ -64,7 +68,7 @@ template<typename T> double cuStats_standard_deviation(unsigned int device_id, T
 
 	cudaMemcpy(d_a, data_set, sizeof(T) * data_set_size, cudaMemcpyHostToDevice);
 
-	cuStats_standard_deviation_kernel << <blocks, threads >> > (d_result, d_a, number_per_thread, mean);
+	cuStats_standard_deviation_kernel << <blocks, threads >> > (d_result, d_a, number_per_thread, data_set_size, mean);
 
 	cudaMemcpy(h_result, d_result, sizeof(T) * data_set_size, cudaMemcpyDeviceToHost);
 
@@ -110,7 +114,7 @@ template<typename T> double cuStats_sample_standard_deviation(unsigned int devic
 
 	cudaMemcpy(d_a, data_set, sizeof(T) * data_set_size, cudaMemcpyHostToDevice);
 
-	cuStats_standard_deviation_kernel << <blocks, threads >> > (d_result, d_a, number_per_thread, mean);
+	cuStats_standard_deviation_kernel << <blocks, threads >> > (d_result, d_a, number_per_thread, data_set_size, mean);
 
 	cudaMemcpy(h_result, d_result, sizeof(T) * data_set_size, cudaMemcpyDeviceToHost);
 
