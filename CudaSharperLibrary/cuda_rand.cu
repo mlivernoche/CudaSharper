@@ -8,8 +8,6 @@
 // For Kepler, we have to double the amount of threads to achieve 100% occupancy.
 #define CURAND_NUM_OF_THREADS 64
 
-#define CURAND_BLOCK_MULTIPLIER 32
-
 // This has to be a multiple of 2.
 #define CURAND_MIN_SIZE_PER_THREAD 16
 
