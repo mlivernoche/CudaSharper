@@ -136,7 +136,9 @@ var uniform_rand = cuRand.GenerateUniformDistribution(100_000);
   - GTX 1050 Ti
 
 ## Changelog
-09/22/2017 - added cuStats.
+09/27/2017 - released Jay. Mostly performance improvements and naming improvements.
+
+09/22/2017 - added cuStats. Released Mike.
 
 09/19/2017 - further improved performance of the cuRAND functions.
 
