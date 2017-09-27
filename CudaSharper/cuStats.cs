@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -17,14 +17,9 @@ namespace CudaSharper
             CudaDeviceComponent = new CudaDevice(device_id);
         }
 
-        public int CudaDevicesCount()
+        public string GetCudaDeviceName()
         {
-            return CudaDeviceComponent.CudaDevicesCount();
-        }
-
-        public string GetCudaDeviceName(int device_id)
-        {
-            return CudaDeviceComponent.GetCudaDeviceName(device_id);
+            return CudaDeviceComponent.GetCudaDeviceName();
         }
 
         [DllImport("CudaSharperLibrary.dll")]

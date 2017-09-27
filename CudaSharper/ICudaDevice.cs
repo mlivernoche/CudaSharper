@@ -1,4 +1,4 @@
-/*
+﻿/*
  * CudaSharper - a wrapper for CUDA-accelerated functions. CudaSharper is not intended to write CUDA in C#, but rather a
  * library that allows one to easily use CUDA-accelerated functions without having to directly interact with the device.
  * This file acts as a wrapper for CudaSharperLibrary.dll, which is required for these functions to run. CudaSharperLibrary.dll
@@ -15,8 +15,7 @@ namespace CudaSharper
 {
     internal interface ICudaDevice
     {
-        int CudaDevicesCount();
-        string GetCudaDeviceName(int device_id);
+        string GetCudaDeviceName();
         int DeviceId { get; }
     }
 }

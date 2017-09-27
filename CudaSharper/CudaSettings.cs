@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using System.Runtime.InteropServices;
 using System.Threading;
 
 /*
@@ -19,19 +20,24 @@ namespace CudaSharper
     public static class CudaSettings
     {
         private static bool WorkingDirSet { get; set; } = false;
-        private static Mutex LoadingMutex { get; set; } = new Mutex(true);
+        private static object LoadingLock { get; set; } = new object();
+
+        public static int CudaDeviceCount { get; private set; }
+
+        [DllImport("CudaSharperLibrary.dll")]
+        private static extern int GetCudaDeviceCount();
 
         public static void Load(string working_directory)
         {
-            LoadingMutex.WaitOne();
+            lock (LoadingLock)
+            {
+                if (WorkingDirSet)
+                    return;
 
-            if (WorkingDirSet)
-                return;
-
-            Environment.SetEnvironmentVariable("PATH", Environment.GetEnvironmentVariable("PATH") + AppDomain.CurrentDomain.BaseDirectory);
-            WorkingDirSet = true;
-
-            LoadingMutex.ReleaseMutex();
+                Environment.SetEnvironmentVariable("PATH", Environment.GetEnvironmentVariable("PATH") + AppDomain.CurrentDomain.BaseDirectory);
+                CudaDeviceCount = GetCudaDeviceCount();
+                WorkingDirSet = true;
+            }
         }
 
         public static void Load()
