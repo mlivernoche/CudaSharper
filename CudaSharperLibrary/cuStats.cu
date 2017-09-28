@@ -33,7 +33,7 @@ void cuStats_determine_launch_parameters(unsigned long int* blocks, unsigned lon
 	return;
 }
 
-__global__ void cuStats_standard_deviation_kernel(float *std, float *sample, unsigned long int number_per_thread, unsigned long long int data_set_size, double mean) {
+__global__ void cuStats_standard_deviation_kernel(float *std, float *sample, unsigned long int number_per_thread, unsigned long long int data_set_size, float mean) {
 	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
 	if (xid + number_per_thread < data_set_size) {
 		for (int i = 0; i < number_per_thread; i++) {
@@ -103,11 +103,11 @@ template<typename T> double cuStats_sample_standard_deviation(unsigned int devic
 	cudaDeviceProp prop;
 	cudaGetDeviceProperties(&prop, device_id);
 
-	unsigned long int blocks = prop.maxThreadsDim[0] * CUSTATS_BLOCK_MULTIPLIER;
+	unsigned long int blocks = 2;
 	unsigned long int threads = CUSTATS_NUM_OF_THREADS;
 	unsigned long int number_per_thread = data_set_size / (blocks * threads) + 1;
 
-	cuStats_determine_launch_parameters(&blocks, &threads, &number_per_thread, prop.maxThreadsDim[0], prop.maxThreadsPerBlock);
+	cuStats_determine_launch_parameters(&blocks, &threads, &number_per_thread, prop.maxGridSize[0], prop.maxThreadsDim[0]);
 
 	T *h_result = (T *)malloc(data_set_size * sizeof(T));
 	memcpy(h_result, data_set, data_set_size * sizeof(T));
@@ -141,4 +141,131 @@ extern "C" __declspec(dllexport) double SampleStandardDeviationFloat(unsigned in
 
 extern "C" __declspec(dllexport) double SampleStandardDeviationDouble(unsigned int device_id, double *sample, unsigned long long int sample_size, double mean) {
 	return cuStats_sample_standard_deviation<double>(device_id, sample, sample_size, mean);
+}
+
+__global__ void cuStats_covariance_kernel(double *result, double *x_array, double x_mean, double *y_array, double y_mean, unsigned long int number_per_thread, unsigned long long int data_set_size) {
+	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
+	if (xid + number_per_thread < data_set_size) {
+		for (int i = 0; i < number_per_thread; i++) {
+			result[xid + i] = (x_array[i] - x_mean) * (y_array[i] - y_mean);
+		}
+	}
+}
+
+__global__ void cuStats_covariance_kernel(float *result, float *x_array, float x_mean, float *y_array, float y_mean, unsigned long int number_per_thread, unsigned long long int data_set_size) {
+	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
+	if (xid + number_per_thread < data_set_size) {
+		for (int i = 0; i < number_per_thread; i++) {
+			result[xid + i] = (x_array[i] - x_mean) * (y_array[i] - y_mean);
+		}
+	}
+}
+
+template<typename T> double cuStats_sample_covariance(unsigned int device_id, T *x_array, double x_mean, T *y_array, double y_mean, unsigned long long int array_size) {
+	cudaError_t gpu_device = cudaSetDevice(device_id);
+
+	cudaDeviceProp prop;
+	cudaGetDeviceProperties(&prop, device_id);
+
+	unsigned long int blocks = 2;
+	unsigned long int threads = CUSTATS_NUM_OF_THREADS;
+	unsigned long int number_per_thread = array_size / (blocks * threads) + 1;
+
+	cuStats_determine_launch_parameters(&blocks, &threads, &number_per_thread, prop.maxGridSize[0], prop.maxThreadsDim[0]);
+
+	T *h_result = (T *)malloc(array_size * sizeof(T));
+	T *d_x, *d_y, *d_result;
+
+	cudaMalloc(&d_x, sizeof(T) * array_size);
+	cudaMalloc(&d_y, sizeof(T) * array_size);
+	cudaMalloc(&d_result, sizeof(T) * array_size);
+
+	cudaMemcpy(d_x, x_array, sizeof(T) * array_size, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_x, y_array, sizeof(T) * array_size, cudaMemcpyHostToDevice);
+
+	cuStats_covariance_kernel << <blocks, threads >> > (d_result, d_x, x_mean, d_y, y_mean, number_per_thread, array_size);
+
+	cudaMemcpy(h_result, d_result, sizeof(T) * array_size, cudaMemcpyDeviceToHost);
+
+	double sum = 0;
+	for (unsigned long long int j = 0; j < array_size; j++) {
+		sum += h_result[j];
+	}
+
+	cudaFree(d_x);
+	cudaFree(d_y);
+	cudaFree(d_result);
+	free(h_result);
+
+	return ((double)1 / (array_size - 1)) * sum;
+}
+
+extern "C" __declspec(dllexport) double SampleCovarianceFloat(unsigned int device_id, float *x_array, double x_mean, float *y_array, double y_mean, unsigned long long int array_size) {
+	return cuStats_sample_covariance<float>(device_id, x_array, x_mean, y_array, y_mean, array_size);
+}
+
+extern "C" __declspec(dllexport) double SampleCovarianceDouble(unsigned int device_id, double *x_array, double x_mean, double *y_array, double y_mean, unsigned long long int array_size) {
+	return cuStats_sample_covariance<double>(device_id, x_array, x_mean, y_array, y_mean, array_size);
+}
+
+template<typename T> double cuStats_covariance(unsigned int device_id, T *x_array, double x_mean, T *y_array, double y_mean, unsigned long long int array_size) {
+	cudaError_t gpu_device = cudaSetDevice(device_id);
+
+	cudaDeviceProp prop;
+	cudaGetDeviceProperties(&prop, device_id);
+
+	unsigned long int blocks = 2;
+	unsigned long int threads = CUSTATS_NUM_OF_THREADS;
+	unsigned long int number_per_thread = array_size / (blocks * threads) + 1;
+
+	cuStats_determine_launch_parameters(&blocks, &threads, &number_per_thread, prop.maxGridSize[0], prop.maxThreadsDim[0]);
+
+	T *h_result = (T *)malloc(array_size * sizeof(T));
+	T *d_x, *d_y, *d_result;
+
+	cudaMalloc(&d_x, sizeof(T) * array_size);
+	cudaMalloc(&d_y, sizeof(T) * array_size);
+	cudaMalloc(&d_result, sizeof(T) * array_size);
+
+	cudaMemcpy(d_x, x_array, sizeof(T) * array_size, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_x, y_array, sizeof(T) * array_size, cudaMemcpyHostToDevice);
+
+	cuStats_covariance_kernel << <blocks, threads >> > (d_result, d_x, x_mean, d_y, y_mean, number_per_thread, array_size);
+
+	cudaMemcpy(h_result, d_result, sizeof(T) * array_size, cudaMemcpyDeviceToHost);
+
+	double sum = 0;
+	for (unsigned long long int j = 0; j < array_size; j++) {
+		sum += h_result[j];
+	}
+
+	cudaFree(d_x);
+	cudaFree(d_y);
+	cudaFree(d_result);
+	free(h_result);
+
+	return ((double)1 / array_size) * sum;
+}
+
+extern "C" __declspec(dllexport) double CovarianceFloat(unsigned int device_id, float *x_array, double x_mean, float *y_array, double y_mean, unsigned long long int array_size) {
+	return cuStats_covariance<float>(device_id, x_array, x_mean, y_array, y_mean, array_size);
+}
+
+extern "C" __declspec(dllexport) double CovarianceDouble(unsigned int device_id, double *x_array, double x_mean, double *y_array, double y_mean, unsigned long long int array_size) {
+	return cuStats_covariance<double>(device_id, x_array, x_mean, y_array, y_mean, array_size);
+}
+
+template<typename T> double cuStats_pearson_correlation(unsigned int device_id, T *x_array, double x_mean, T *y_array, double y_mean, unsigned long long int array_size) {
+	double covariance = cuStats_covariance(device_id, x_array, x_mean, y_array, y_mean, array_size);
+	double x_standard_deviation = cuStats_standard_deviation(device_id, x_array, array_size, x_mean);
+	double y_standard_deviation = cuStats_standard_deviation(device_id, y_array, array_size, y_mean);
+	return covariance / (x_standard_deviation * y_standard_deviation);
+}
+
+extern "C" __declspec(dllexport) double PearsonCorrelationFloat(unsigned int device_id, float *x_array, double x_mean, float *y_array, double y_mean, unsigned long long int array_size) {
+	return cuStats_pearson_correlation<float>(device_id, x_array, x_mean, y_array, y_mean, array_size);
+}
+
+extern "C" __declspec(dllexport) double PearsonCorrelationDouble(unsigned int device_id, double *x_array, double x_mean, double *y_array, double y_mean, unsigned long long int array_size) {
+	return cuStats_pearson_correlation<double>(device_id, x_array, x_mean, y_array, y_mean, array_size);
 }
