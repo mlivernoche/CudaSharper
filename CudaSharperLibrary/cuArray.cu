@@ -28,7 +28,7 @@ void cuArray_determine_launch_parameters(unsigned long int* blocks, unsigned lon
 		}
 		return;
 	}
-	else {
+	else if (*number_per_thread > 1) {
 		// Because this is a multiple of two, blocks * threads * number_per_thread is usually twice the amount needed. Minus one to correct it.
 		*number_per_thread = *number_per_thread - 1;
 	}
