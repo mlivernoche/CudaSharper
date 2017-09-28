@@ -73,5 +73,57 @@ namespace CudaSharper
         {
             return StandardDeviation(sample, sample.Average());
         }
+
+        [DllImport("CudaSharperLibrary.dll")]
+        private static extern double SampleCovarianceDouble(uint device_id, double[] x_array, double x_mean, double[] y_array, double y_mean, ulong sample_size);
+
+        public double SampleCovariance(double[] x_array, double x_mean, double[] y_array, double y_mean)
+        {
+            return SampleCovarianceDouble((uint)CudaDeviceComponent.DeviceId, x_array, x_array.Average(), y_array, y_array.Average(), (uint) x_array.Length);
+        }
+
+        public double SampleCovariance(double[] x_array, double[] y_array)
+        {
+            return SampleCovariance(x_array, x_array.Average(), y_array, y_array.Average());
+        }
+
+        [DllImport("CudaSharperLibrary.dll")]
+        private static extern double SampleCovarianceFloat(uint device_id, float[] x_array, double x_mean, float[] y_array, double y_mean, ulong sample_size);
+
+        public double SampleCovariance(float[] x_array, double x_mean, float[] y_array, double y_mean)
+        {
+            return SampleCovarianceFloat((uint)CudaDeviceComponent.DeviceId, x_array, x_array.Average(), y_array, y_array.Average(), (uint)x_array.Length);
+        }
+
+        public double SampleCovariance(float[] x_array, float[] y_array)
+        {
+            return SampleCovariance(x_array, x_array.Average(), y_array, y_array.Average());
+        }
+
+        [DllImport("CudaSharperLibrary.dll")]
+        private static extern double PearsonCorrelationFloat(uint device_id, float[] x_array, double x_mean, float[] y_array, double y_mean, ulong sample_size);
+
+        public double Correlation(float[] x_array, double x_mean, float[] y_array, double y_mean)
+        {
+            return PearsonCorrelationFloat((uint)CudaDeviceComponent.DeviceId, x_array, x_array.Average(), y_array, y_array.Average(), (uint)x_array.Length);
+        }
+
+        public double Correlation(float[] x_array, float[] y_array)
+        {
+            return Correlation(x_array, x_array.Average(), y_array, y_array.Average());
+        }
+
+        [DllImport("CudaSharperLibrary.dll")]
+        private static extern double PearsonCorrelationDouble(uint device_id, double[] x_array, double x_mean, double[] y_array, double y_mean, ulong sample_size);
+
+        public double Correlation(double[] x_array, double x_mean, double[] y_array, double y_mean)
+        {
+            return PearsonCorrelationDouble((uint)CudaDeviceComponent.DeviceId, x_array, x_array.Average(), y_array, y_array.Average(), (uint)x_array.Length);
+        }
+
+        public double Correlation(double[] x_array, double[] y_array)
+        {
+            return Correlation(x_array, x_array.Average(), y_array, y_array.Average());
+        }
     }
 }
