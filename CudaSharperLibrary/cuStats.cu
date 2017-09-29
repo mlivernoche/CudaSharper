@@ -181,7 +181,7 @@ template<typename T> double cuStats_sample_covariance(unsigned int device_id, T 
 	cudaMalloc(&d_result, sizeof(T) * array_size);
 
 	cudaMemcpy(d_x, x_array, sizeof(T) * array_size, cudaMemcpyHostToDevice);
-	cudaMemcpy(d_x, y_array, sizeof(T) * array_size, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_y, y_array, sizeof(T) * array_size, cudaMemcpyHostToDevice);
 
 	cuStats_covariance_kernel << <blocks, threads >> > (d_result, d_x, x_mean, d_y, y_mean, number_per_thread, array_size);
 
@@ -228,7 +228,7 @@ template<typename T> double cuStats_covariance(unsigned int device_id, T *x_arra
 	cudaMalloc(&d_result, sizeof(T) * array_size);
 
 	cudaMemcpy(d_x, x_array, sizeof(T) * array_size, cudaMemcpyHostToDevice);
-	cudaMemcpy(d_x, y_array, sizeof(T) * array_size, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_y, y_array, sizeof(T) * array_size, cudaMemcpyHostToDevice);
 
 	cuStats_covariance_kernel << <blocks, threads >> > (d_result, d_x, x_mean, d_y, y_mean, number_per_thread, array_size);
 
