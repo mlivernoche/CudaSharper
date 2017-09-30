@@ -21,8 +21,6 @@ extern "C" __declspec(dllexport) void LogNormalRand(unsigned int device_id, unsi
 extern "C" __declspec(dllexport) void LogNormalRandDouble(unsigned int device_id, unsigned int amount_of_numbers, double *result, float mean, float stddev);
 extern "C" __declspec(dllexport) void PoissonRand(unsigned int device_id, unsigned int amount_of_numbers, int *result, double lambda);
 
-//__global__ void cuda_rand_init(long long int seed, curandState_t* states);
-
 __global__ void cuda_rand_uniform_rand_kernel(long long int seed, float *numbers, unsigned int count, unsigned int maximum);
 void cuda_rand_uniform_rand(unsigned int device_id, unsigned int amount_of_numbers, float *result);
 
