@@ -14,23 +14,19 @@
 void cuda_rand_determine_launch_parameters(unsigned long int* blocks, unsigned long int* threads, unsigned long int* number_per_thread, unsigned long int max_block_size, unsigned long int max_thread_size) {
 	if (*number_per_thread > CURAND_MIN_SIZE_PER_THREAD)
 	{
-		if ((*blocks * 2) <= max_block_size)
+		if ((*blocks * 2) < max_block_size)
 		{
 			*blocks = (*blocks * 2);
 			*number_per_thread = (int)ceil(*number_per_thread / 2) + 1;
 			cuda_rand_determine_launch_parameters(blocks, threads, number_per_thread, max_block_size, max_thread_size);
 		}
-		else if ((*threads * 2) <= max_thread_size)
+		else if ((*threads * 2) < max_thread_size)
 		{
 			*threads = (*threads * 2);
 			*number_per_thread = (int)ceil(*number_per_thread / 2) + 1;
 			cuda_rand_determine_launch_parameters(blocks, threads, number_per_thread, max_block_size, max_thread_size);
 		}
 		return;
-	}
-	else if (*number_per_thread > 1) {
-		// Because this is a multiple of two, blocks * threads * number_per_thread is usually twice the amount needed. Minus one to correct it.
-		*number_per_thread = *number_per_thread - 1;
 	}
 	return;
 }
@@ -67,15 +63,6 @@ extern "C" __declspec(dllexport) void LogNormalRandDouble(unsigned int device_id
 extern "C" __declspec(dllexport) void PoissonRand(unsigned int device_id, unsigned int amount_of_numbers, int *result, double lambda) {
 	cuda_rand_poisson_rand(device_id, amount_of_numbers, result, lambda);
 }
-
-//__global__ void cuda_rand_init(long long int seed, curandState_t* states) {
-//	curand_init(
-//		seed + (threadIdx.x + (blockIdx.x * blockDim.x)),
-//		0,
-//		0,
-//		&states[(threadIdx.x + (blockIdx.x * blockDim.x))]
-//	);
-//}
 
 __global__ void cuda_rand_uniform_rand_kernel(long long int seed, float *numbers, unsigned int count, unsigned int maximum) {
 	extern __shared__ int smem[];
