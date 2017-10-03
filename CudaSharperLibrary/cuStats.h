@@ -36,3 +36,5 @@ template<typename T> double cuStats_pearson_correlation(unsigned int device_id, 
 extern "C" __declspec(dllexport) double PearsonCorrelationFloat(unsigned int device_id, float *x_array, double x_mean, float *y_array, double y_mean, unsigned long long int array_size);
 extern "C" __declspec(dllexport) double PearsonCorrelationDouble(unsigned int device_id, double *x_array, double x_mean, double *y_array, double y_mean, unsigned long long int array_size);
 
+
+

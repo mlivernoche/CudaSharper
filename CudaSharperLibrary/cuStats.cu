@@ -12,13 +12,13 @@
 void cuStats_determine_launch_parameters(unsigned long int* blocks, unsigned long int* threads, unsigned long int* number_per_thread, unsigned long int max_block_size, unsigned long int max_thread_size) {
 	if (*number_per_thread > CUSTATS_MIN_SIZE_PER_THREAD)
 	{
-		if ((*blocks * 2) <= max_block_size)
+		if ((*blocks * 2) < max_block_size)
 		{
 			*blocks = (*blocks * 2);
 			*number_per_thread = (int)ceil(*number_per_thread / 2) + 1;
 			cuStats_determine_launch_parameters(blocks, threads, number_per_thread, max_block_size, max_thread_size);
 		}
-		else if ((*threads * 2) <= max_thread_size)
+		else if ((*threads * 2) < max_thread_size)
 		{
 			*threads = (*threads * 2);
 			*number_per_thread = (int)ceil(*number_per_thread / 2) + 1;
@@ -26,27 +26,45 @@ void cuStats_determine_launch_parameters(unsigned long int* blocks, unsigned lon
 		}
 		return;
 	}
-	else if(*number_per_thread > 1) {
-		// Because this is a multiple of two, blocks * threads * number_per_thread is usually twice the amount needed. Minus one to correct it.
-		*number_per_thread = *number_per_thread - 1;
-	}
 	return;
 }
 
 __global__ void cuStats_standard_deviation_kernel(float *std, float *sample, unsigned long int number_per_thread, unsigned long long int data_set_size, float mean) {
 	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-	if (xid + number_per_thread < data_set_size) {
+
+	// This is the starting point of the array that this kernel is responsible for.
+	int kernel_block = (xid * number_per_thread);
+
+	if (number_per_thread + kernel_block < data_set_size) {
+		// We can do the entire chunk of numbers in the array.
 		for (int i = 0; i < number_per_thread; i++) {
-			std[xid + i] = powf(sample[xid + i] - mean, 2);
+			std[i + kernel_block] = powf(sample[i + kernel_block] - mean, 2);
+		}
+	}
+	else if (kernel_block < data_set_size) {
+		// We can't do the entire chunk of numbers in the array, we can still do some of it.
+		for (int i = 0; i < data_set_size - kernel_block; i++) {
+			std[i + kernel_block] = powf(sample[i + kernel_block] - mean, 2);
 		}
 	}
 }
 
 __global__ void cuStats_standard_deviation_kernel(double *std, double *sample, unsigned long int number_per_thread, unsigned long long int data_set_size, double mean) {
 	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-	if (xid + number_per_thread < data_set_size) {
+
+	// This is the starting point of the array that this kernel is responsible for.
+	int kernel_block = (xid * number_per_thread);
+
+	if (number_per_thread + kernel_block < data_set_size) {
+		// We can do the entire chunk of numbers in the array.
 		for (int i = 0; i < number_per_thread; i++) {
-			std[xid + i] = pow(sample[xid + i] - mean, 2);
+			std[i + kernel_block] = pow(sample[i + kernel_block] - mean, 2);
+		}
+	}
+	else if (kernel_block < data_set_size) {
+		// We can't do the entire chunk of numbers in the array, we can still do some of it.
+		for (int i = 0; i < data_set_size - kernel_block; i++) {
+			std[i + kernel_block] = pow(sample[i + kernel_block] - mean, 2);
 		}
 	}
 }
@@ -85,7 +103,7 @@ template<typename T> double cuStats_standard_deviation(unsigned int device_id, T
 	cudaFree(d_a);
 	cudaFree(d_result);
 	free(h_result);
-	
+
 	return sqrt(((double)1 / data_set_size) * sum_std);
 }
 
@@ -145,18 +163,40 @@ extern "C" __declspec(dllexport) double SampleStandardDeviationDouble(unsigned i
 
 __global__ void cuStats_covariance_kernel(double *result, double *x_array, double x_mean, double *y_array, double y_mean, unsigned long int number_per_thread, unsigned long long int data_set_size) {
 	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-	if (xid + number_per_thread < data_set_size) {
+
+	// This is the starting point of the array that this kernel is responsible for.
+	int kernel_block = (xid * number_per_thread);
+
+	if (number_per_thread + kernel_block < data_set_size) {
+		// We can do the entire chunk of numbers in the array.
 		for (int i = 0; i < number_per_thread; i++) {
-			result[xid + i] = (x_array[i] - x_mean) * (y_array[i] - y_mean);
+			result[i + kernel_block] = (x_array[i + kernel_block] - x_mean) * (y_array[i + kernel_block] - y_mean);
+		}
+	}
+	else if (kernel_block < data_set_size) {
+		// We can't do the entire chunk of numbers in the array, we can still do some of it.
+		for (int i = 0; i < data_set_size - kernel_block; i++) {
+			result[i + kernel_block] = (x_array[i + kernel_block] - x_mean) * (y_array[i + kernel_block] - y_mean);
 		}
 	}
 }
 
 __global__ void cuStats_covariance_kernel(float *result, float *x_array, float x_mean, float *y_array, float y_mean, unsigned long int number_per_thread, unsigned long long int data_set_size) {
 	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-	if (xid + number_per_thread < data_set_size) {
+
+	// This is the starting point of the array that this kernel is responsible for.
+	int kernel_block = (xid * number_per_thread);
+
+	if (number_per_thread + kernel_block < data_set_size) {
+		// We can do the entire chunk of numbers in the array.
 		for (int i = 0; i < number_per_thread; i++) {
-			result[xid + i] = (x_array[i] - x_mean) * (y_array[i] - y_mean);
+			result[i + kernel_block] = (x_array[i + kernel_block] - x_mean) * (y_array[i + kernel_block] - y_mean);
+		}
+	}
+	else if (kernel_block < data_set_size) {
+		// We can't do the entire chunk of numbers in the array, we can still do some of it.
+		for (int i = 0; i < data_set_size - kernel_block; i++) {
+			result[i + kernel_block] = (x_array[i + kernel_block] - x_mean) * (y_array[i + kernel_block] - y_mean);
 		}
 	}
 }
@@ -197,7 +237,7 @@ template<typename T> double cuStats_sample_covariance(unsigned int device_id, T 
 	cudaFree(d_result);
 	free(h_result);
 
-	return ((double)1 / (array_size - 1)) * sum;
+	return sum / (double)(array_size - 1);
 }
 
 extern "C" __declspec(dllexport) double SampleCovarianceFloat(unsigned int device_id, float *x_array, double x_mean, float *y_array, double y_mean, unsigned long long int array_size) {
@@ -236,7 +276,8 @@ template<typename T> double cuStats_covariance(unsigned int device_id, T *x_arra
 
 	double sum = 0;
 	for (unsigned long long int j = 0; j < array_size; j++) {
-		sum += h_result[j];
+		T h = h_result[j];
+		sum += h;
 	}
 
 	cudaFree(d_x);
@@ -244,7 +285,7 @@ template<typename T> double cuStats_covariance(unsigned int device_id, T *x_arra
 	cudaFree(d_result);
 	free(h_result);
 
-	return ((double)1 / array_size) * sum;
+	return sum / (double) array_size;
 }
 
 extern "C" __declspec(dllexport) double CovarianceFloat(unsigned int device_id, float *x_array, double x_mean, float *y_array, double y_mean, unsigned long long int array_size) {

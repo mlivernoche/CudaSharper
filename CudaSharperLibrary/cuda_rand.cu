@@ -2,7 +2,7 @@
 #include "cuda_rand.h"
 
 // sizeof(curandState_t) = 48.
-// Launching 64 threads, 48 * 64 = 3072; 3072 * 32 = 98304 bytes. (32 = block limit).
+// Launching 64 threads, 48 * 64 = 3072; 3072 * 32 = 98304 bytes. (32 = active warps).
 // 98304 is the amount of shared memory per block available on Pascal/Maxwell!
 // Using the shared memory for this kernel can halve the execution time (on Pascal).
 // For Kepler, we have to double the amount of threads to achieve 100% occupancy.
@@ -200,7 +200,7 @@ __global__ void cuda_rand_normal_rand_kernel(long long int seed, float *numbers,
 
 	// The state.
 	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-	
+
 	curand_init(seed + xid, 0, 0, &curandStateShared[threadIdx.x]);
 
 	// This is the starting point of the array that this kernel is responsible for.
