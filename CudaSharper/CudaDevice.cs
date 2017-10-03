@@ -23,6 +23,8 @@ namespace CudaSharper
 
         public CudaDevice(int device_id)
         {
+            CudaSettings.Load();
+
             if ((device_id + 1) > CudaSettings.CudaDeviceCount)
             {
                 throw new ArgumentOutOfRangeException("Bad DeviceId provided: not enough CUDA-enabled devices available. Devices available: " + CudaSettings.CudaDeviceCount + ". DeviceId: " + device_id);
@@ -31,13 +33,10 @@ namespace CudaSharper
             DeviceId = device_id;
         }
 
-        [DllImport("CudaSharperLibrary.dll", CallingConvention = CallingConvention.Cdecl)]
-        private static extern void GetCudaDeviceName(int device_id, StringBuilder device_name_ptr);
-
         public string GetCudaDeviceName()
         {
             StringBuilder device_name = new StringBuilder(128);
-            GetCudaDeviceName(DeviceId, device_name);
+            SafeNativeMethods.GetCudaDeviceName(DeviceId, device_name);
             return device_name.ToString();
         }
     }

@@ -22,10 +22,7 @@ namespace CudaSharper
         private static bool WorkingDirSet { get; set; } = false;
         private static object LoadingLock { get; set; } = new object();
 
-        public static int CudaDeviceCount { get; private set; }
-
-        [DllImport("CudaSharperLibrary.dll")]
-        private static extern int GetCudaDeviceCount();
+        public static int CudaDeviceCount { get; private set; } = 0;
 
         public static void Load(string working_directory)
         {
@@ -34,13 +31,13 @@ namespace CudaSharper
                 if (WorkingDirSet)
                     return;
 
-                Environment.SetEnvironmentVariable("PATH", Environment.GetEnvironmentVariable("PATH") + AppDomain.CurrentDomain.BaseDirectory);
-                CudaDeviceCount = GetCudaDeviceCount();
+                Environment.SetEnvironmentVariable("PATH", Environment.GetEnvironmentVariable("PATH") + working_directory);
+                CudaDeviceCount = SafeNativeMethods.GetCudaDeviceCount();
                 WorkingDirSet = true;
             }
         }
 
-        public static void Load()
+        internal static void Load()
         {
             Load(AppDomain.CurrentDomain.BaseDirectory);
         }

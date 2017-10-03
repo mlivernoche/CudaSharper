@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
 /*
  * CudaSharper - a wrapper for CUDA-accelerated functions. CudaSharper is not intended to write CUDA in C#, but rather a
@@ -32,13 +31,15 @@ namespace CudaSharper
             CudaDeviceComponent = new CudaDevice(device_id);
         }
 
+        public CuRand(CudaDevice device)
+        {
+            CudaDeviceComponent = device;
+        }
+
         public string GetCudaDeviceName()
         {
             return CudaDeviceComponent.GetCudaDeviceName();
         }
-
-        [DllImport("CudaSharperLibrary.dll")]
-        private static extern void UniformRand(int device_id, int amount_of_numbers, float[] result);
 
         /// <summary>
         /// Generates random numbers using XORWOW and a uniform distribution. This method utilizies the single-precision (FP32) capabilities of the GPU. If you need higher precision,
@@ -48,7 +49,7 @@ namespace CudaSharper
         /// <param name="result">The array that will hold the random numbers (in memory for the CPU to use).</param>
         public void GenerateUniformDistribution(int amount_of_numbers, float[] result)
         {
-            UniformRand(DeviceId, amount_of_numbers, result);
+            SafeNativeMethods.UniformRand(DeviceId, amount_of_numbers, result);
         }
 
         /// <summary>
@@ -60,12 +61,9 @@ namespace CudaSharper
         public float[] GenerateUniformDistribution(int amount_of_numbers)
         {
             var result = new float[amount_of_numbers];
-            UniformRand(DeviceId, amount_of_numbers, result);
+            SafeNativeMethods.UniformRand(DeviceId, amount_of_numbers, result);
             return result;
         }
-
-        [DllImport("CudaSharperLibrary.dll")]
-        private static extern void UniformRandDouble(int device_id, int amount_of_numbers, double[] result);
 
         /// <summary>
         /// Generate random numbers using XORWOW and a uniform distribution. This method utilizes the double-precision (FP64) capabilities of the GPU; this will perform worse than 
@@ -76,7 +74,7 @@ namespace CudaSharper
         /// <param name="result">The array that will hold the random numbers (in memory for the CPU to use).</param>
         public void GenerateUniformDistributionDP(int amount_of_numbers, double[] result)
         {
-            UniformRandDouble(DeviceId, amount_of_numbers, result);
+            SafeNativeMethods.UniformRandDouble(DeviceId, amount_of_numbers, result);
         }
 
         /// <summary>
@@ -89,12 +87,9 @@ namespace CudaSharper
         public double[] GenerateUniformDistributionDP(int amount_of_numbers)
         {
             var result = new double[amount_of_numbers];
-            UniformRandDouble(DeviceId, amount_of_numbers, result);
+            SafeNativeMethods.UniformRandDouble(DeviceId, amount_of_numbers, result);
             return result;
         }
-
-        [DllImport("CudaSharperLibrary.dll")]
-        private static extern void LogNormalRand(int device_id, int amount_of_numbers, float[] result, float mean, float stddev);
 
         /// <summary>
         /// Generates random numbers using XORWOW and a log normal distribution. This method utilizies the single-precision (FP32) capabilities of the GPU. If you need higher precision,
@@ -104,7 +99,7 @@ namespace CudaSharper
         /// <param name="result">The array that will hold the random numbers (in memory for the CPU to use).</param>
         public void GenerateLogNormalDistribution(int amount_of_numbers, float[] result, float mean, float stddev)
         {
-            LogNormalRand(DeviceId, amount_of_numbers, result, mean, stddev);
+            SafeNativeMethods.LogNormalRand(DeviceId, amount_of_numbers, result, mean, stddev);
         }
 
         /// <summary>
@@ -116,12 +111,9 @@ namespace CudaSharper
         public float[] GenerateLogNormalDistribution(int amount_of_numbers, float mean, float stddev)
         {
             var result = new float[amount_of_numbers];
-            LogNormalRand(DeviceId, amount_of_numbers, result, mean, stddev);
+            SafeNativeMethods.LogNormalRand(DeviceId, amount_of_numbers, result, mean, stddev);
             return result;
         }
-
-        [DllImport("CudaSharperLibrary.dll")]
-        private static extern void LogNormalRandDouble(int device_id, int amount_of_numbers, double[] result, float mean, float stddev);
 
         /// <summary>
         /// Generate random numbers using XORWOW and a log normal distribution. This method utilizes the double-precision (FP64) capabilities of the GPU; this will perform worse than 
@@ -134,7 +126,7 @@ namespace CudaSharper
         /// <param name="stddev">The standard deviation of the distribution.</param>
         public void GenerateLogNormalDistributionDP(int amount_of_numbers, double[] result, float mean, float stddev)
         {
-            LogNormalRandDouble(DeviceId, amount_of_numbers, result, mean, stddev);
+            SafeNativeMethods.LogNormalRandDouble(DeviceId, amount_of_numbers, result, mean, stddev);
         }
 
         /// <summary>
@@ -149,12 +141,9 @@ namespace CudaSharper
         public double[] GenerateLogNormalDistributionDP(int amount_of_numbers, float mean, float stddev)
         {
             var result = new double[amount_of_numbers];
-            LogNormalRandDouble(DeviceId, amount_of_numbers, result, mean, stddev);
+            SafeNativeMethods.LogNormalRandDouble(DeviceId, amount_of_numbers, result, mean, stddev);
             return result;
         }
-
-        [DllImport("CudaSharperLibrary.dll")]
-        private static extern void NormalRand(int device_id, int amount_of_numbers, float[] result);
 
         /// <summary>
         /// Generates random numbers using XORWOW and a normal distribution. This method utilizies the single-precision (FP32) capabilities of the GPU. If you need higher precision,
@@ -164,7 +153,7 @@ namespace CudaSharper
         /// <param name="result">The array that will hold the random numbers (in memory for the CPU to use).</param>
         public void GenerateNormalDistribution(int amount_of_numbers, float[] result)
         {
-            NormalRand(DeviceId, amount_of_numbers, result);
+            SafeNativeMethods.NormalRand(DeviceId, amount_of_numbers, result);
         }
 
         /// <summary>
@@ -176,12 +165,9 @@ namespace CudaSharper
         public float[] GenerateNormalDistribution(int amount_of_numbers)
         {
             var result = new float[amount_of_numbers];
-            NormalRand(DeviceId, amount_of_numbers, result);
+            SafeNativeMethods.NormalRand(DeviceId, amount_of_numbers, result);
             return result;
         }
-
-        [DllImport("CudaSharperLibrary.dll")]
-        private static extern void NormalRandDouble(int device_id, int amount_of_numbers, double[] result);
 
         /// <summary>
         /// Generates random numbers using XORWOW and a normal distribution. This method utilizes the double-precision (FP64) capabilities of the GPU; this will perform worse than 
@@ -192,7 +178,7 @@ namespace CudaSharper
         /// <param name="result">An IEnumerable holding the random numbers (in memory for the CPU to use).</param>
         public void GenerateNormalDistributionDP(int amount_of_numbers, double[] result)
         {
-            NormalRandDouble(DeviceId, amount_of_numbers, result);
+            SafeNativeMethods.NormalRandDouble(DeviceId, amount_of_numbers, result);
         }
 
         /// <summary>
@@ -205,22 +191,19 @@ namespace CudaSharper
         public double[] GenerateNormalDistributionDP(int amount_of_numbers)
         {
             var result = new double[amount_of_numbers];
-            NormalRandDouble(DeviceId, amount_of_numbers, result);
+            SafeNativeMethods.NormalRandDouble(DeviceId, amount_of_numbers, result);
             return result;
         }
 
-        [DllImport("CudaSharperLibrary.dll")]
-        private static extern void PoissonRand(int device_id, int amount_of_numbers, int[] result, double lambda);
-
         public void GeneratePoissonDistribution(int amount_of_numbers, int[] result, double lambda)
         {
-            PoissonRand(DeviceId, amount_of_numbers, result, lambda);
+            SafeNativeMethods.PoissonRand(DeviceId, amount_of_numbers, result, lambda);
         }
 
         public int[] GeneratePoissonDistribution(int amount_of_numbers, double lambda)
         {
             var result = new int[amount_of_numbers];
-            PoissonRand(DeviceId, amount_of_numbers, result, lambda);
+            SafeNativeMethods.PoissonRand(DeviceId, amount_of_numbers, result, lambda);
             return result;
         }
     }
