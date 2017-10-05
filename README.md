@@ -84,6 +84,19 @@ Allows generating random numbers with the cuRAND library. These should be used f
 
 The functions that generate double (e.g., curand_normal2) and quadruple (e.g., curand_normal4) tuples will be implemented seperately.
 
+### Statistics
+
+| Functions/Formulas | CudaSharper Method |
+| ------------------ | ------------------ |
+| Sample Standard Deviation | SampleStandardDeviation |
+| Standard Deviation | StandardDeviation |
+| Sample Covariance | SampleCovariance |
+| Covariance | Covariance |
+| Covariance Matrix | CovarianceMatrix |
+| Pearson Correlation | Correlation |
+| Pearson Correlation Matrix | CorrelationMatrix |
+| Value-at-Risk | VaR |
+
 ## Examples
 
 ### Example \#1: Merging two arrays
