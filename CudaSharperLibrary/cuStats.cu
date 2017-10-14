@@ -1,312 +1,295 @@
 #pragma once
 #include "cuStats.h"
-#include <math.h>
 
-#define CUSTATS_NUM_OF_THREADS 128
+#define CUSTATS_NUM_OF_THREADS 64
 
-#define CUSTATS_BLOCK_MULTIPLIER 32
+#define CUSTATS_MIN_NUM_OF_BLOCKS 2
 
-// This has to be a multiple of 2.
-#define CUSTATS_MIN_SIZE_PER_THREAD 2
-
-void cuStats_determine_launch_parameters(unsigned long int* blocks, unsigned long int* threads, unsigned long int* number_per_thread, unsigned long int max_block_size, unsigned long int max_thread_size) {
-	if (*number_per_thread > CUSTATS_MIN_SIZE_PER_THREAD)
-	{
-		if ((*blocks * 2) < max_block_size)
-		{
-			*blocks = (*blocks * 2);
-			*number_per_thread = (int)ceil(*number_per_thread / 2) + 1;
-			cuStats_determine_launch_parameters(blocks, threads, number_per_thread, max_block_size, max_thread_size);
-		}
-		else if ((*threads * 2) < max_thread_size)
+void cuStats::determine_launch_parameters(int32_t* blocks, int32_t* threads, const int64_t array_size, const int32_t max_block_size, const int32_t max_thread_size) {
+	if (*blocks * *threads < array_size) {
+		if ((*threads * 2) <= max_thread_size)
 		{
 			*threads = (*threads * 2);
-			*number_per_thread = (int)ceil(*number_per_thread / 2) + 1;
-			cuStats_determine_launch_parameters(blocks, threads, number_per_thread, max_block_size, max_thread_size);
+			cuStats::determine_launch_parameters(blocks, threads, array_size, max_block_size, max_thread_size);
+		}
+		else if ((*blocks * 2) <= max_block_size)
+		{
+			*blocks = (*blocks * 2);
+			cuStats::determine_launch_parameters(blocks, threads, array_size, max_block_size, max_thread_size);
 		}
 		return;
 	}
 	return;
 }
 
-__global__ void cuStats_standard_deviation_kernel(float *std, float *sample, unsigned long int number_per_thread, unsigned long long int data_set_size, float mean) {
-	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
+__global__ void cuStats_standard_deviation_kernel(float* std, float* sample, const int64_t data_set_size, float mean) {
+	extern __shared__ float4 std_f32[];
 
-	// This is the starting point of the array that this kernel is responsible for.
-	int kernel_block = (xid * number_per_thread);
+	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+	float4 std_data;
 
-	if (number_per_thread + kernel_block < data_set_size) {
-		// We can do the entire chunk of numbers in the array.
-		for (int i = 0; i < number_per_thread; i++) {
-			std[i + kernel_block] = powf(sample[i + kernel_block] - mean, 2);
-		}
+	for (int i = idx; i < data_set_size / 4; i += blockDim.x * gridDim.x) {
+		std_f32[threadIdx.x].x = sample[i];
+		std_f32[threadIdx.x].y = sample[i + 1];
+		std_f32[threadIdx.x].z = sample[i + 2];
+		std_f32[threadIdx.x].w = sample[i + 3];
+
+		std_data.x = (std_f32[threadIdx.x].x - mean) * (std_f32[threadIdx.x].x - mean);
+		std_data.y = (std_f32[threadIdx.x].y - mean) * (std_f32[threadIdx.x].y - mean);
+		std_data.z = (std_f32[threadIdx.x].z - mean) * (std_f32[threadIdx.x].z - mean);
+		std_data.w = (std_f32[threadIdx.x].w - mean) * (std_f32[threadIdx.x].w - mean);
+		reinterpret_cast<float4*>(std)[i] = std_data;
 	}
-	else if (kernel_block < data_set_size) {
-		// We can't do the entire chunk of numbers in the array, we can still do some of it.
-		for (int i = 0; i < data_set_size - kernel_block; i++) {
-			std[i + kernel_block] = powf(sample[i + kernel_block] - mean, 2);
-		}
-	}
-}
 
-__global__ void cuStats_standard_deviation_kernel(double *std, double *sample, unsigned long int number_per_thread, unsigned long long int data_set_size, double mean) {
-	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-
-	// This is the starting point of the array that this kernel is responsible for.
-	int kernel_block = (xid * number_per_thread);
-
-	if (number_per_thread + kernel_block < data_set_size) {
-		// We can do the entire chunk of numbers in the array.
-		for (int i = 0; i < number_per_thread; i++) {
-			std[i + kernel_block] = pow(sample[i + kernel_block] - mean, 2);
-		}
-	}
-	else if (kernel_block < data_set_size) {
-		// We can't do the entire chunk of numbers in the array, we can still do some of it.
-		for (int i = 0; i < data_set_size - kernel_block; i++) {
-			std[i + kernel_block] = pow(sample[i + kernel_block] - mean, 2);
-		}
+	for (int i = idx + (data_set_size / 4) * 4; i < data_set_size; i += idx) {
+		std[i] = (sample[i] - mean) * (sample[i] - mean);
 	}
 }
 
-template<typename T> double cuStats_standard_deviation(unsigned int device_id, T *data_set, unsigned long long int data_set_size, double mean) {
-	cudaError_t gpu_device = cudaSetDevice(device_id);
+__global__ void cuStats_standard_deviation_kernel(double* std, double* sample, const int64_t data_set_size, double mean) {
+	extern __shared__ double4 std_f64[];
+
+	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+	double4 std_data;
+
+	for (int i = idx; i < data_set_size / 4; i += blockDim.x * gridDim.x) {
+		std_f64[threadIdx.x].x = sample[i];
+		std_f64[threadIdx.x].y = sample[i + 1];
+		std_f64[threadIdx.x].z = sample[i + 2];
+		std_f64[threadIdx.x].w = sample[i + 3];
+
+		std_data.x = (std_f64[threadIdx.x].x - mean) * (std_f64[threadIdx.x].x - mean);
+		std_data.y = (std_f64[threadIdx.x].y - mean) * (std_f64[threadIdx.x].y - mean);
+		std_data.z = (std_f64[threadIdx.x].z - mean) * (std_f64[threadIdx.x].z - mean);
+		std_data.w = (std_f64[threadIdx.x].w - mean) * (std_f64[threadIdx.x].w - mean);
+		reinterpret_cast<double4*>(std)[i] = std_data;
+	}
+
+	for (int i = idx + (data_set_size / 4) * 4; i < data_set_size; i += idx) {
+		std[i] = (sample[i] - mean) * (sample[i] - mean);
+	}
+}
+
+template<typename T> cudaError_t cuStats::standard_deviation_summation(int32_t device_id, double &result, T *sample, const int64_t sample_size, T mean) {
+	cudaError_t errorCode = cudaSetDevice(device_id);
+	if (errorCode != cudaSuccess) return errorCode;
 
 	cudaDeviceProp prop;
-	cudaGetDeviceProperties(&prop, device_id);
+	errorCode = cudaGetDeviceProperties(&prop, device_id);
+	if (errorCode != cudaSuccess) return errorCode;
 
-	unsigned long int blocks = 2;
-	unsigned long int threads = CUSTATS_NUM_OF_THREADS;
-	unsigned long int number_per_thread = data_set_size / (blocks * threads) + 1;
+	const size_t data_size_in_memory = sizeof(T) * sample_size;
+	int32_t blocks = CUSTATS_MIN_NUM_OF_BLOCKS;
+	int32_t threads = CUSTATS_NUM_OF_THREADS;
 
-	cuStats_determine_launch_parameters(&blocks, &threads, &number_per_thread, prop.maxGridSize[0], prop.maxThreadsDim[0]);
+	cuStats::determine_launch_parameters(&blocks, &threads, sample_size, prop.multiProcessorCount * 32, prop.maxThreadsDim[0]);
 
-	T *h_result = (T *)malloc(data_set_size * sizeof(T));
-	memcpy(h_result, data_set, data_set_size * sizeof(T));
-
+	// cudaHostAlloc() allows faster copying from DtoH, but it is much slower than malloc().
+	// The benefit does not outweigh the cost.
+	T *h_result = (T*)malloc(data_size_in_memory);
 	T *d_a, *d_result;
 
-	cudaMalloc(&d_a, sizeof(T) * data_set_size);
-	cudaMalloc(&d_result, sizeof(T) * data_set_size);
+	errorCode = cudaMalloc(&d_a, data_size_in_memory);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaMalloc(&d_result, data_size_in_memory);
+	if (errorCode != cudaSuccess) return errorCode;
 
-	cudaMemcpy(d_a, data_set, sizeof(T) * data_set_size, cudaMemcpyHostToDevice);
+	errorCode = cudaMemcpy(d_a, sample, data_size_in_memory, cudaMemcpyHostToDevice);
+	if (errorCode != cudaSuccess) return errorCode;
 
-	cuStats_standard_deviation_kernel << <blocks, threads >> > (d_result, d_a, number_per_thread, data_set_size, mean);
+	size_t shared_memory = sizeof(T) * 4 * threads;
+	cuStats_standard_deviation_kernel << <blocks, threads, shared_memory >> > (d_result, d_a, sample_size, mean);
 
-	cudaMemcpy(h_result, d_result, sizeof(T) * data_set_size, cudaMemcpyDeviceToHost);
+	errorCode = cudaMemcpy(h_result, d_result, data_size_in_memory, cudaMemcpyDeviceToHost);
+	if (errorCode != cudaSuccess) return errorCode;
 
 	double sum_std = 0;
-	for (int j = 0; j < data_set_size; j++) {
-		sum_std += h_result[j];
+	for (int64_t j = 0; j < sample_size; j++) {
+		sum_std += (double)h_result[j];
 	}
 
-	cudaFree(d_a);
-	cudaFree(d_result);
+	errorCode = cudaFree(d_a);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaFree(d_result);
+	if (errorCode != cudaSuccess) return errorCode;
 	free(h_result);
 
-	return sqrt(((double)1 / data_set_size) * sum_std);
+	result = sum_std;
+
+	return cudaSuccess;
 }
 
-extern "C" __declspec(dllexport) double StandardDeviationFloat(unsigned int device_id, float *population, unsigned long long int population_size, double mean) {
-	return cuStats_standard_deviation<float>(device_id, population, population_size, mean);
+template<typename T> cudaError_t cuStats::standard_deviation(int32_t device_id, double &result, T *data_set, const int64_t data_set_size, T mean) {
+	double sum = 0;
+	cudaError_t errorCode = cuStats::standard_deviation_summation(device_id, sum, data_set, data_set_size, mean);
+	result = sqrt(sum / data_set_size);
+	return errorCode;
 }
 
-extern "C" __declspec(dllexport) double StandardDeviationDouble(unsigned int device_id, double *population, unsigned long long int population_size, double mean) {
-	return cuStats_standard_deviation<double>(device_id, population, population_size, mean);
+template<typename T> cudaError_t cuStats::sample_standard_deviation(int32_t device_id, double &result, T *data_set, const int64_t data_set_size, T mean) {
+	double sum = 0;
+	cudaError_t errorCode = cuStats::standard_deviation_summation(device_id, sum, data_set, data_set_size, mean);
+	result = sqrt(sum / (data_set_size - 1));
+	return errorCode;
 }
 
-template<typename T> double cuStats_sample_standard_deviation(unsigned int device_id, T *data_set, unsigned long long int data_set_size, double mean) {
-	cudaError_t gpu_device = cudaSetDevice(device_id);
+__global__ void cuStats_covariance_kernel(double *result, double *x_array, double x_mean, double *y_array, double y_mean, const int64_t data_set_size) {
+	extern __shared__ double4 cov_f64[];
+
+	int idx = threadIdx.x + (blockIdx.x * blockDim.x);
+
+	for (int i = idx; i < data_set_size / 4; i += blockDim.x * gridDim.x) {
+		cov_f64[threadIdx.x].x = (x_array[i] - x_mean) * (y_array[i] - y_mean);
+		cov_f64[threadIdx.x].y = (x_array[i + 1] - x_mean) * (y_array[i + 1] - y_mean);
+		cov_f64[threadIdx.x].z = (x_array[i + 2] - x_mean) * (y_array[i + 2] - y_mean);
+		cov_f64[threadIdx.x].w = (x_array[i + 3] - x_mean) * (y_array[i + 3] - y_mean);
+		reinterpret_cast<double4*>(result)[i] = cov_f64[threadIdx.x];
+	}
+
+	for (int i = idx + (data_set_size / 4) * 4; i < data_set_size; i += idx) {
+		result[i] = (x_array[i] - x_mean) * (y_array[i] - y_mean);
+	}
+}
+
+__global__ void cuStats_covariance_kernel(float *result, float *x_array, float x_mean, float *y_array, float y_mean, const int64_t data_set_size) {
+	extern __shared__ float4 cov_f32[];
+
+	int idx = threadIdx.x + (blockIdx.x * blockDim.x);
+
+	for (int i = idx; i < data_set_size / 4; i += blockDim.x * gridDim.x) {
+		cov_f32[threadIdx.x].x = (x_array[i] - x_mean) * (y_array[i] - y_mean);
+		cov_f32[threadIdx.x].y = (x_array[i + 1] - x_mean) * (y_array[i + 1] - y_mean);
+		cov_f32[threadIdx.x].z = (x_array[i + 2] - x_mean) * (y_array[i + 2] - y_mean);
+		cov_f32[threadIdx.x].w = (x_array[i + 3] - x_mean) * (y_array[i + 3] - y_mean);
+		reinterpret_cast<float4*>(result)[i] = cov_f32[threadIdx.x];
+	}
+
+	for (int i = idx + (data_set_size / 4) * 4; i < data_set_size; i += idx) {
+		result[i] = (x_array[i] - x_mean) * (y_array[i] - y_mean);
+	}
+}
+
+template<typename T> cudaError_t cuStats::covariance_summation(int32_t device_id, double &result, T *x_array, T x_mean, T *y_array, T y_mean, const int64_t array_size) {
+	cudaError_t errorCode = cudaSetDevice(device_id);
+	if (errorCode != cudaSuccess) return errorCode;
 
 	cudaDeviceProp prop;
 	cudaGetDeviceProperties(&prop, device_id);
+	if (errorCode != cudaSuccess) return errorCode;
 
-	unsigned long int blocks = 2;
-	unsigned long int threads = CUSTATS_NUM_OF_THREADS;
-	unsigned long int number_per_thread = data_set_size / (blocks * threads) + 1;
+	const size_t data_size_in_memory = sizeof(T) * array_size;
+	int32_t blocks = CUSTATS_MIN_NUM_OF_BLOCKS;
+	int32_t threads = CUSTATS_NUM_OF_THREADS;
 
-	cuStats_determine_launch_parameters(&blocks, &threads, &number_per_thread, prop.maxGridSize[0], prop.maxThreadsDim[0]);
+	cuStats::determine_launch_parameters(&blocks, &threads, array_size, prop.multiProcessorCount * 32, prop.maxThreadsDim[0]);
 
-	T *h_result = (T *)malloc(data_set_size * sizeof(T));
-	memcpy(h_result, data_set, data_set_size * sizeof(T));
-
-	T *d_a, *d_result;
-
-	cudaMalloc(&d_a, sizeof(T) * data_set_size);
-	cudaMalloc(&d_result, sizeof(T) * data_set_size);
-
-	cudaMemcpy(d_a, data_set, sizeof(T) * data_set_size, cudaMemcpyHostToDevice);
-
-	cuStats_standard_deviation_kernel << <blocks, threads >> > (d_result, d_a, number_per_thread, data_set_size, mean);
-
-	cudaMemcpy(h_result, d_result, sizeof(T) * data_set_size, cudaMemcpyDeviceToHost);
-
-	double sum_std = 0;
-	for (int j = 0; j < data_set_size; j++) {
-		sum_std += h_result[j];
-	}
-
-	cudaFree(d_a);
-	cudaFree(d_result);
-	free(h_result);
-
-	return sqrt(((double)1 / (data_set_size - 1)) * sum_std);
-}
-
-extern "C" __declspec(dllexport) double SampleStandardDeviationFloat(unsigned int device_id, float *sample, unsigned long long int sample_size, double mean) {
-	return cuStats_sample_standard_deviation<float>(device_id, sample, sample_size, mean);
-}
-
-extern "C" __declspec(dllexport) double SampleStandardDeviationDouble(unsigned int device_id, double *sample, unsigned long long int sample_size, double mean) {
-	return cuStats_sample_standard_deviation<double>(device_id, sample, sample_size, mean);
-}
-
-__global__ void cuStats_covariance_kernel(double *result, double *x_array, double x_mean, double *y_array, double y_mean, unsigned long int number_per_thread, unsigned long long int data_set_size) {
-	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-
-	// This is the starting point of the array that this kernel is responsible for.
-	int kernel_block = (xid * number_per_thread);
-
-	if (number_per_thread + kernel_block < data_set_size) {
-		// We can do the entire chunk of numbers in the array.
-		for (int i = 0; i < number_per_thread; i++) {
-			result[i + kernel_block] = (x_array[i + kernel_block] - x_mean) * (y_array[i + kernel_block] - y_mean);
-		}
-	}
-	else if (kernel_block < data_set_size) {
-		// We can't do the entire chunk of numbers in the array, we can still do some of it.
-		for (int i = 0; i < data_set_size - kernel_block; i++) {
-			result[i + kernel_block] = (x_array[i + kernel_block] - x_mean) * (y_array[i + kernel_block] - y_mean);
-		}
-	}
-}
-
-__global__ void cuStats_covariance_kernel(float *result, float *x_array, float x_mean, float *y_array, float y_mean, unsigned long int number_per_thread, unsigned long long int data_set_size) {
-	int xid = (threadIdx.x + (blockIdx.x * blockDim.x));
-
-	// This is the starting point of the array that this kernel is responsible for.
-	int kernel_block = (xid * number_per_thread);
-
-	if (number_per_thread + kernel_block < data_set_size) {
-		// We can do the entire chunk of numbers in the array.
-		for (int i = 0; i < number_per_thread; i++) {
-			result[i + kernel_block] = (x_array[i + kernel_block] - x_mean) * (y_array[i + kernel_block] - y_mean);
-		}
-	}
-	else if (kernel_block < data_set_size) {
-		// We can't do the entire chunk of numbers in the array, we can still do some of it.
-		for (int i = 0; i < data_set_size - kernel_block; i++) {
-			result[i + kernel_block] = (x_array[i + kernel_block] - x_mean) * (y_array[i + kernel_block] - y_mean);
-		}
-	}
-}
-
-template<typename T> double cuStats_sample_covariance(unsigned int device_id, T *x_array, double x_mean, T *y_array, double y_mean, unsigned long long int array_size) {
-	cudaError_t gpu_device = cudaSetDevice(device_id);
-
-	cudaDeviceProp prop;
-	cudaGetDeviceProperties(&prop, device_id);
-
-	unsigned long int blocks = 2;
-	unsigned long int threads = CUSTATS_NUM_OF_THREADS;
-	unsigned long int number_per_thread = array_size / (blocks * threads) + 1;
-
-	cuStats_determine_launch_parameters(&blocks, &threads, &number_per_thread, prop.maxGridSize[0], prop.maxThreadsDim[0]);
-
+	// cudaHostAlloc() allows faster copying from DtoH, but it is much slower than malloc().
+	// The benefit does not outweigh the cost.
 	T *h_result = (T *)malloc(array_size * sizeof(T));
 	T *d_x, *d_y, *d_result;
 
-	cudaMalloc(&d_x, sizeof(T) * array_size);
-	cudaMalloc(&d_y, sizeof(T) * array_size);
-	cudaMalloc(&d_result, sizeof(T) * array_size);
+	errorCode = cudaMalloc(&d_x, data_size_in_memory);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaMalloc(&d_y, data_size_in_memory);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaMalloc(&d_result, data_size_in_memory);
+	if (errorCode != cudaSuccess) return errorCode;
 
-	cudaMemcpy(d_x, x_array, sizeof(T) * array_size, cudaMemcpyHostToDevice);
-	cudaMemcpy(d_y, y_array, sizeof(T) * array_size, cudaMemcpyHostToDevice);
+	errorCode = cudaMemcpy(d_x, x_array, data_size_in_memory, cudaMemcpyHostToDevice);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaMemcpy(d_y, y_array, data_size_in_memory, cudaMemcpyHostToDevice);
+	if (errorCode != cudaSuccess) return errorCode;
 
-	cuStats_covariance_kernel << <blocks, threads >> > (d_result, d_x, x_mean, d_y, y_mean, number_per_thread, array_size);
+	size_t shared_memory = sizeof(T) * 4 * threads;
+	cuStats_covariance_kernel << <blocks, threads, shared_memory >> > (d_result, d_x, x_mean, d_y, y_mean, array_size);
 
-	cudaMemcpy(h_result, d_result, sizeof(T) * array_size, cudaMemcpyDeviceToHost);
-
-	double sum = 0;
-	for (unsigned long long int j = 0; j < array_size; j++) {
-		sum += h_result[j];
-	}
-
-	cudaFree(d_x);
-	cudaFree(d_y);
-	cudaFree(d_result);
-	free(h_result);
-
-	return sum / (double)(array_size - 1);
-}
-
-extern "C" __declspec(dllexport) double SampleCovarianceFloat(unsigned int device_id, float *x_array, double x_mean, float *y_array, double y_mean, unsigned long long int array_size) {
-	return cuStats_sample_covariance<float>(device_id, x_array, x_mean, y_array, y_mean, array_size);
-}
-
-extern "C" __declspec(dllexport) double SampleCovarianceDouble(unsigned int device_id, double *x_array, double x_mean, double *y_array, double y_mean, unsigned long long int array_size) {
-	return cuStats_sample_covariance<double>(device_id, x_array, x_mean, y_array, y_mean, array_size);
-}
-
-template<typename T> double cuStats_covariance(unsigned int device_id, T *x_array, double x_mean, T *y_array, double y_mean, unsigned long long int array_size) {
-	cudaError_t gpu_device = cudaSetDevice(device_id);
-
-	cudaDeviceProp prop;
-	cudaGetDeviceProperties(&prop, device_id);
-
-	unsigned long int blocks = 2;
-	unsigned long int threads = CUSTATS_NUM_OF_THREADS;
-	unsigned long int number_per_thread = array_size / (blocks * threads) + 1;
-
-	cuStats_determine_launch_parameters(&blocks, &threads, &number_per_thread, prop.maxGridSize[0], prop.maxThreadsDim[0]);
-
-	T *h_result = (T *)malloc(array_size * sizeof(T));
-	T *d_x, *d_y, *d_result;
-
-	cudaMalloc(&d_x, sizeof(T) * array_size);
-	cudaMalloc(&d_y, sizeof(T) * array_size);
-	cudaMalloc(&d_result, sizeof(T) * array_size);
-
-	cudaMemcpy(d_x, x_array, sizeof(T) * array_size, cudaMemcpyHostToDevice);
-	cudaMemcpy(d_y, y_array, sizeof(T) * array_size, cudaMemcpyHostToDevice);
-
-	cuStats_covariance_kernel << <blocks, threads >> > (d_result, d_x, x_mean, d_y, y_mean, number_per_thread, array_size);
-
-	cudaMemcpy(h_result, d_result, sizeof(T) * array_size, cudaMemcpyDeviceToHost);
+	errorCode = cudaMemcpyAsync(h_result, d_result, data_size_in_memory, cudaMemcpyDeviceToHost);
+	if (errorCode != cudaSuccess) return errorCode;
 
 	double sum = 0;
-	for (unsigned long long int j = 0; j < array_size; j++) {
-		T h = h_result[j];
-		sum += h;
+	for (int64_t j = 0; j < array_size; j++) {
+		sum += (double)h_result[j];
 	}
 
-	cudaFree(d_x);
-	cudaFree(d_y);
-	cudaFree(d_result);
+	errorCode = cudaFree(d_x);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaFree(d_y);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaFree(d_result);
+	if (errorCode != cudaSuccess) return errorCode;
 	free(h_result);
 
-	return sum / (double) array_size;
+	result = sum;
+
+	return cudaSuccess;
 }
 
-extern "C" __declspec(dllexport) double CovarianceFloat(unsigned int device_id, float *x_array, double x_mean, float *y_array, double y_mean, unsigned long long int array_size) {
-	return cuStats_covariance<float>(device_id, x_array, x_mean, y_array, y_mean, array_size);
+template<typename T> cudaError_t cuStats::covariance(int32_t device_id, double &result, T *x_array, T x_mean, T *y_array, T y_mean, const int64_t array_size) {
+	double sum = 0;
+	cudaError_t errorCode = cuStats::covariance_summation(device_id, sum, x_array, x_mean, y_array, y_mean, array_size);
+	if (errorCode != cudaSuccess) return errorCode;
+	result = sum / array_size;
+	return errorCode;
 }
 
-extern "C" __declspec(dllexport) double CovarianceDouble(unsigned int device_id, double *x_array, double x_mean, double *y_array, double y_mean, unsigned long long int array_size) {
-	return cuStats_covariance<double>(device_id, x_array, x_mean, y_array, y_mean, array_size);
+template<typename T> cudaError_t cuStats::sample_covariance(int32_t device_id, double &result, T *x_array, T x_mean, T *y_array, T y_mean, const int64_t array_size) {
+	double sum = 0;
+	cudaError_t errorCode = cuStats::covariance_summation(device_id, sum, x_array, x_mean, y_array, y_mean, array_size);
+	if (errorCode != cudaSuccess) return errorCode;
+	result = sum / (array_size - 1);
+	return errorCode;
 }
 
-template<typename T> double cuStats_pearson_correlation(unsigned int device_id, T *x_array, double x_mean, T *y_array, double y_mean, unsigned long long int array_size) {
-	double covariance = cuStats_covariance(device_id, x_array, x_mean, y_array, y_mean, array_size);
-	double x_standard_deviation = cuStats_standard_deviation(device_id, x_array, array_size, x_mean);
-	double y_standard_deviation = cuStats_standard_deviation(device_id, y_array, array_size, y_mean);
-	return covariance / (x_standard_deviation * y_standard_deviation);
+template<typename T> cudaError_t cuStats::pearson_correlation(int32_t device_id, double &result, T *x_array, T x_mean, T *y_array, T y_mean, const int64_t array_size) {
+	// Corr(x, y) = Cov(x, y) / (Std(x) * Std(y))
+	
+	double covariance = 0, x_standard_deviation = 0, y_standard_deviation = 0;
+
+	cudaError_t errorCode = cuStats::covariance(device_id, covariance, x_array, x_mean, y_array, y_mean, array_size);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cuStats::standard_deviation(device_id, x_standard_deviation, x_array, array_size, x_mean);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cuStats::standard_deviation(device_id, y_standard_deviation, y_array, array_size, y_mean);
+	if (errorCode != cudaSuccess) return errorCode;
+
+	result = covariance / (x_standard_deviation * y_standard_deviation);
+
+	return cudaSuccess;
 }
 
-extern "C" __declspec(dllexport) double PearsonCorrelationFloat(unsigned int device_id, float *x_array, double x_mean, float *y_array, double y_mean, unsigned long long int array_size) {
-	return cuStats_pearson_correlation<float>(device_id, x_array, x_mean, y_array, y_mean, array_size);
-}
+extern "C" {
+	__declspec(dllexport) int32_t StandardDeviationFloat(int32_t device_id, double &result, float *population, const int64_t population_size, float mean) {
+		return marshal_cuda_error(cuStats::standard_deviation<float>(device_id, result, population, population_size, mean));
+	}
+	__declspec(dllexport) int32_t StandardDeviationDouble(int32_t device_id, double &result, double *population, const int64_t population_size, double mean) {
+		return marshal_cuda_error(cuStats::standard_deviation<double>(device_id, result, population, population_size, mean));
+	}
 
-extern "C" __declspec(dllexport) double PearsonCorrelationDouble(unsigned int device_id, double *x_array, double x_mean, double *y_array, double y_mean, unsigned long long int array_size) {
-	return cuStats_pearson_correlation<double>(device_id, x_array, x_mean, y_array, y_mean, array_size);
+	__declspec(dllexport) int32_t SampleStandardDeviationFloat(int32_t device_id, double &result, float *sample, const int64_t sample_size, float mean) {
+		return marshal_cuda_error(cuStats::sample_standard_deviation<float>(device_id, result, sample, sample_size, mean));
+	}
+	__declspec(dllexport) int32_t SampleStandardDeviationDouble(int32_t device_id, double &result, double *sample, const int64_t sample_size, double mean) {
+		return marshal_cuda_error(cuStats::sample_standard_deviation<double>(device_id, result, sample, sample_size, mean));
+	}
+
+	__declspec(dllexport) int32_t CovarianceFloat(int32_t device_id, double &result, float *x_array, float x_mean, float *y_array, float y_mean, const int64_t array_size) {
+		return marshal_cuda_error(cuStats::covariance<float>(device_id, result, x_array, x_mean, y_array, y_mean, array_size));
+	}
+	__declspec(dllexport) int32_t CovarianceDouble(int32_t device_id, double &result, double *x_array, double x_mean, double *y_array, double y_mean, const int64_t array_size) {
+		return marshal_cuda_error(cuStats::covariance<double>(device_id, result, x_array, x_mean, y_array, y_mean, array_size));
+	}
+	
+	__declspec(dllexport) int32_t SampleCovarianceFloat(int32_t device_id, double &result, float *x_array, float x_mean, float *y_array, float y_mean, const int64_t array_size) {
+		return marshal_cuda_error(cuStats::sample_covariance<float>(device_id, result, x_array, x_mean, y_array, y_mean, array_size));
+	}
+	__declspec(dllexport) int32_t SampleCovarianceDouble(int32_t device_id, double &result, double *x_array, double x_mean, double *y_array, double y_mean, const int64_t array_size) {
+		return marshal_cuda_error(cuStats::sample_covariance<double>(device_id, result, x_array, x_mean, y_array, y_mean, array_size));
+	}
+
+	__declspec(dllexport) int32_t PearsonCorrelationFloat(int32_t device_id, double &result, float *x_array, float x_mean, float *y_array, float y_mean, const int64_t array_size) {
+		return marshal_cuda_error(cuStats::pearson_correlation<float>(device_id, result, x_array, x_mean, y_array, y_mean, array_size));
+	}
+	__declspec(dllexport) int32_t PearsonCorrelationDouble(int32_t device_id, double &result, double *x_array, double x_mean, double *y_array, double y_mean, const int64_t array_size) {
+		return marshal_cuda_error(cuStats::pearson_correlation<double>(device_id, result, x_array, x_mean, y_array, y_mean, array_size));
+	}
 }

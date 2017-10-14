@@ -3,6 +3,7 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include "cuda_profiler_api.h"
+#include "device_functions.h"
 #include "curand.h"
 #include "curand_kernel.h"
 #include <iostream>
@@ -10,34 +11,41 @@
 #include <time.h>
 #include <chrono>
 
-void cuda_rand_determine_launch_parameters(unsigned long int* blocks, unsigned long int* threads, unsigned long int* number_per_thread, unsigned long int max_block_size, unsigned long int max_thread_size);
-long long int cuda_rand_time_seed();
+#include "DeviceInfo.h"
+#include "AutomatedStreams.h"
 
-extern "C" __declspec(dllexport) void UniformRand(unsigned int device_id, unsigned int amount_of_numbers, float *result);
-extern "C" __declspec(dllexport) void UniformRandDouble(unsigned int device_id, unsigned int amount_of_numbers, double *result);
-extern "C" __declspec(dllexport) void NormalRand(unsigned int device_id, unsigned int amount_of_numbers, float *result);
-extern "C" __declspec(dllexport) void NormalRandDouble(unsigned int device_id, unsigned int amount_of_numbers, double *result);
-extern "C" __declspec(dllexport) void LogNormalRand(unsigned int device_id, unsigned int amount_of_numbers, float *result, float mean, float stddev);
-extern "C" __declspec(dllexport) void LogNormalRandDouble(unsigned int device_id, unsigned int amount_of_numbers, double *result, float mean, float stddev);
-extern "C" __declspec(dllexport) void PoissonRand(unsigned int device_id, unsigned int amount_of_numbers, int *result, double lambda);
+class cuda_rand {
+public:
+	static cudaError_t uniform_rand(int32_t device_id, const int64_t amount_of_numbers, float *result);
+	static cudaError_t uniform_rand_double(int32_t device_id, const int64_t amount_of_numbers, double *result);
 
-__global__ void cuda_rand_uniform_rand_kernel(long long int seed, float *numbers, unsigned int count, unsigned int maximum);
-void cuda_rand_uniform_rand(unsigned int device_id, unsigned int amount_of_numbers, float *result);
+	static cudaError_t normal_rand(int32_t device_id, const int64_t amount_of_numbers, float *result);
+	static cudaError_t normal_rand_double(int32_t device_id, const int64_t amount_of_numbers, double *result);
 
-__global__ void cuda_rand_uniform_rand_double_kernel(long long int seed, double *numbers, unsigned int count, unsigned int maximum);
-void cuda_rand_uniform_rand_double(unsigned int device_id, unsigned int amount_of_numbers, double *result);
+	static cudaError_t log_normal_rand(int32_t device_id, const int64_t amount_of_numbers, float *result, float mean, float stddev);
+	static cudaError_t log_normal_rand_double(int32_t device_id, const int64_t amount_of_numbers, double *result, double mean, double stddev);
 
-__global__ void cuda_rand_normal_rand_kernel(long long int seed, float *numbers, unsigned int count, unsigned int maximum);
-void cuda_rand_normal_rand(unsigned int device_id, unsigned int amount_of_numbers, float *result);
+	static cudaError_t poisson_rand(int32_t device_id, const int64_t amount_of_numbers, int32_t *result, double lambda);
 
-__global__ void cuda_rand_normal_rand_double_kernel(long long int seed, double *numbers, unsigned int count, unsigned int maximum);
-void cuda_rand_normal_rand_double(unsigned int device_id, unsigned int amount_of_numbers, double *result);
+protected:
+	static void determine_launch_parameters(int32_t* blocks, int32_t* threads, const int64_t array_size, const int32_t max_block_size, const int32_t max_thread_size);
+	static int64_t time_seed();
+};
 
-__global__ void cuda_rand_log_normal_rand_kernel(long long int seed, float *numbers, unsigned int count, unsigned int maximum, float mean, float stddev);
-void cuda_rand_log_normal_rand(unsigned int device_id, unsigned int amount_of_numbers, float *result, float mean, float stddev);
+extern "C" {
+	__declspec(dllexport) int32_t UniformRand(int32_t device_id, float *result, int64_t amount_of_numbers);
+	__declspec(dllexport) int32_t UniformRandDouble(int32_t device_id, double *result, int64_t amount_of_numbers);
+	__declspec(dllexport) int32_t NormalRand(int32_t device_id, float *result, int64_t amount_of_numbers);
+	__declspec(dllexport) int32_t NormalRandDouble(int32_t device_id, double *result, int64_t amount_of_numbers);
+	__declspec(dllexport) int32_t LogNormalRand(int32_t device_id, float *result, int64_t amount_of_numbers, float mean, float stddev);
+	__declspec(dllexport) int32_t LogNormalRandDouble(int32_t device_id, double *result, int64_t amount_of_numbers, float mean, float stddev);
+	__declspec(dllexport) int32_t PoissonRand(int32_t device_id, int32_t *result, int64_t amount_of_numbers, double lambda);
+}
 
-__global__ void cuda_rand_log_normal_rand_double_kernel(long long int seed, double *numbers, unsigned int count, unsigned int maximum, double mean, double stddev);
-void cuda_rand_log_normal_rand_double(unsigned int device_id, unsigned int amount_of_numbers, double *result, double mean, double stddev);
-
-__global__ void cuda_rand_poisson_rand_kernel(long long int seed, int *numbers, unsigned int count, unsigned int maximum, double lambda);
-void cuda_rand_poisson_rand(unsigned int device_id, unsigned int amount_of_numbers, int *result, double lambda);
+__global__ void cuda_rand_uniform_rand_kernel(int64_t seed, float *numbers, const int64_t maximum);
+__global__ void cuda_rand_uniform_rand_double_kernel(int64_t seed, double *numbers, const int64_t maximum);
+__global__ void cuda_rand_normal_rand_kernel(int64_t seed, float *numbers, const int64_t maximum);
+__global__ void cuda_rand_normal_rand_double_kernel(int64_t seed, double *numbers, const int64_t maximum);
+__global__ void cuda_rand_log_normal_rand_kernel(int64_t seed, float *numbers, const int64_t maximum, float mean, float stddev);
+__global__ void cuda_rand_log_normal_rand_double_kernel(int64_t seed, double *numbers, const int64_t maximum, double mean, double stddev);
+__global__ void cuda_rand_poisson_rand_kernel(int64_t seed, int32_t *numbers, const int64_t maximum, double lambda);

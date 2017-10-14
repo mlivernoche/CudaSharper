@@ -4,37 +4,52 @@
 #include "device_launch_parameters.h"
 #include "cuda_profiler_api.h"
 #include "device_functions.h"
+#include <atomic>
+#include <math.h>
 
-void cuStats_determine_launch_parameters(unsigned long int* blocks, unsigned long int* threads, unsigned long int* number_per_thread, unsigned long int max_block_size, unsigned long int max_thread_size);
+#include "DeviceInfo.h"
+#include "AutomatedStreams.h"
 
-__global__ void cuStats_standard_deviation_kernel(float *std, float *sample, unsigned long int number_per_thread, unsigned long long int data_set_size, float mean);
-__global__ void cuStats_standard_deviation_kernel(double *std, double *sample, unsigned long int number_per_thread, unsigned long long int data_set_size, double mean);
-template<typename T> double cuStats_standard_deviation(unsigned int device_id, T *sample, unsigned long long int sample_size, double mean);
+class cuStats {
+public:
+	// The only difference between pop STD and sample STD is the n - 1. 
+	template<typename T> static cudaError_t standard_deviation_summation(int32_t device_id, double &result, T *sample, const int64_t sample_size, T mean);
+	template<typename T> static cudaError_t standard_deviation(int32_t device_id, double &result, T *sample, const int64_t sample_size, T mean);
+	template<typename T> static cudaError_t sample_standard_deviation(int32_t device_id, double &result, T *sample, const int64_t sample_size, T mean);
+
+	template<typename T> static cudaError_t covariance_summation(int32_t device_id, double &result, T *x_array, T x_mean, T *y_array, T y_mean, const int64_t array_size);
+	template<typename T> static cudaError_t covariance(int32_t device_id, double &result, T *x_array, T x_mean, T *y_array, T y_mean, const int64_t array_size);
+	template<typename T> static cudaError_t sample_covariance(int32_t device_id, double &result, T *x_array, T x_mean, T *y_array, T y_mean, const int64_t array_size);
+
+	template<typename T> static cudaError_t pearson_correlation(int32_t device_id, double &result, T *x_array, T x_mean, T *y_array, T y_mean, const int64_t array_size);
+protected:
+	static void determine_launch_parameters(int32_t* blocks, int32_t* threads, const int64_t array_size, const int32_t max_block_size, const int32_t max_thread_size);
+};
+
+__global__ void cuStats_standard_deviation_kernel(float* std, float* sample, const int64_t data_set_size, float mean);
+__global__ void cuStats_standard_deviation_kernel(double* std, double* sample, const int64_t data_set_size, double mean);
+
+__global__ void cuStats_covariance_kernel(double *result, double *x_array, double x_mean, double *y_array, double y_mean, const int64_t data_set_size);
+__global__ void cuStats_covariance_kernel(float *result, float *x_array, float x_mean, float *y_array, float y_mean, const int64_t data_set_size);
 
 // C does not "support" function overloading like C++ does.
 // Why, then, do these have to be marked as C? C++ will mangle the function names to support overloading.
 // Marking them as C will make sure that these function names will not be changed.
-extern "C" __declspec(dllexport) double StandardDeviationFloat(unsigned int device_id, float *population, unsigned long long int population_size, double mean);
-extern "C" __declspec(dllexport) double StandardDeviationDouble(unsigned int device_id, double *population, unsigned long long int population_size, double mean);
+extern "C" {
+	__declspec(dllexport) void cuStats_Dispose();
 
-template<typename T> double cuStats_sample_standard_deviation(unsigned int device_id, T *sample, unsigned long long int sample_size, double mean);
-extern "C" __declspec(dllexport) double SampleStandardDeviationFloat(unsigned int device_id, float *sample, unsigned long long int sample_size, double mean);
-extern "C" __declspec(dllexport) double SampleStandardDeviationDouble(unsigned int device_id, double *sample, unsigned long long int sample_size, double mean);
+	__declspec(dllexport) int32_t StandardDeviationFloat(int32_t device_id, double &result, float *population, const int64_t population_size, float mean);
+	__declspec(dllexport) int32_t StandardDeviationDouble(int32_t device_id, double &result, double *population, const int64_t population_size, double mean);
 
-__global__ void cuStats_covariance_kernel(double *result, double *x_array, double x_mean, double *y_array, double y_mean, unsigned long int number_per_thread, unsigned long long int data_set_size);
-__global__ void cuStats_covariance_kernel(float *result, float *x_array, float x_mean, float *y_array, float y_mean, unsigned long int number_per_thread, unsigned long long int data_set_size);
-template<typename T> double cuStats_sample_covariance(unsigned int device_id, T *x_array, double x_mean, T *y_array, double y_mean, unsigned long long int array_size);
-extern "C" __declspec(dllexport) double SampleCovarianceFloat(unsigned int device_id, float *x_array, double x_mean, float *y_array, double y_mean, unsigned long long int array_size);
-extern "C" __declspec(dllexport) double SampleCovarianceDouble(unsigned int device_id, double *x_array, double x_mean, double *y_array, double y_mean, unsigned long long int array_size);
+	__declspec(dllexport) int32_t SampleStandardDeviationFloat(int32_t device_id, double &result, float *sample, const int64_t sample_size, float mean);
+	__declspec(dllexport) int32_t SampleStandardDeviationDouble(int32_t device_id, double &result, double *sample, const int64_t sample_size, double mean);
 
-template<typename T> double cuStats_covariance(unsigned int device_id, T *x_array, double x_mean, T *y_array, double y_mean, unsigned long long int array_size);
+	__declspec(dllexport) int32_t SampleCovarianceFloat(int32_t device_id, double &result, float *x_array, float x_mean, float *y_array, float y_mean, const int64_t array_size);
+	__declspec(dllexport) int32_t SampleCovarianceDouble(int32_t device_id, double &result, double *x_array, double x_mean, double *y_array, double y_mean, const int64_t array_size);
 
-extern "C" __declspec(dllexport) double CovarianceFloat(unsigned int device_id, float *x_array, double x_mean, float *y_array, double y_mean, unsigned long long int array_size);
-extern "C" __declspec(dllexport) double CovarianceDouble(unsigned int device_id, double *x_array, double x_mean, double *y_array, double y_mean, unsigned long long int array_size);
+	__declspec(dllexport) int32_t CovarianceFloat(int32_t device_id, double &result, float *x_array, float x_mean, float *y_array, float y_mean, const int64_t array_size);
+	__declspec(dllexport) int32_t CovarianceDouble(int32_t device_id, double &result, double *x_array, double x_mean, double *y_array, double y_mean, const int64_t array_size);
 
-template<typename T> double cuStats_pearson_correlation(unsigned int device_id, T *x_array, double x_mean, T *y_array, double y_mean, unsigned long long int array_size);
-extern "C" __declspec(dllexport) double PearsonCorrelationFloat(unsigned int device_id, float *x_array, double x_mean, float *y_array, double y_mean, unsigned long long int array_size);
-extern "C" __declspec(dllexport) double PearsonCorrelationDouble(unsigned int device_id, double *x_array, double x_mean, double *y_array, double y_mean, unsigned long long int array_size);
-
-
-
+	__declspec(dllexport) int32_t PearsonCorrelationFloat(int32_t device_id, double &result, float *x_array, float x_mean, float *y_array, float y_mean, const int64_t array_size);
+	__declspec(dllexport) int32_t PearsonCorrelationDouble(int32_t device_id, double &result, double *x_array, double x_mean, double *y_array, double y_mean, const int64_t array_size);
+}

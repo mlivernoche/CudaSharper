@@ -1,27 +1,30 @@
 #include "cuda_blas.h"
 
-cublasOperation_t cuda_blas_determine_op(unsigned int op) {
+cublasOperation_t cuda_blas_determine_op(int32_t op) {
 	cublasOperation_t trans_op = CUBLAS_OP_N;
 	switch (op) {
-	case 0: trans_op = CUBLAS_OP_N; break;
-	case 1: trans_op = CUBLAS_OP_T; break;
-	case 2: trans_op = CUBLAS_OP_C; break;
+		case 0: trans_op = CUBLAS_OP_N; break;
+		case 1: trans_op = CUBLAS_OP_T; break;
+		case 2: trans_op = CUBLAS_OP_C; break;
 	}
 	return trans_op;
 }
 
-void cuda_blas_matrix_multiply(
-	unsigned int device_id,
-	unsigned int transa_op, unsigned int transb_op,
-	int m, int n, int k,
+cudaError_t cuda_blas_matrix_multiply(
+	int32_t device_id,
+	int32_t transa_op, int32_t transb_op,
+	int32_t m, int32_t n, int32_t k,
 	float alpha,
 	float *a,
 	float *b,
 	float beta,
 	float *c) {
-	cudaError_t gpu_device = cudaSetDevice(device_id);
+	cudaError_t errorCode = cudaSetDevice(device_id);
+	if (errorCode != cudaSuccess) return errorCode;
+
 	cudaDeviceProp prop;
-	cudaGetDeviceProperties(&prop, device_id);
+	errorCode = cudaGetDeviceProperties(&prop, device_id);
+	if (errorCode != cudaSuccess) return errorCode;
 
 	// A(m,k)
 	int row_a = m;
@@ -57,12 +60,17 @@ void cuda_blas_matrix_multiply(
 	size_t size_c = row_c * col_c * sizeof(float);
 
 	// C(m,n) = A(m,k) * B(k,n)
-	cudaMalloc(&d_a, size_a);
-	cudaMalloc(&d_b, size_b);
-	cudaMalloc(&d_c, size_c);
+	errorCode = cudaMalloc(&d_a, size_a);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaMalloc(&d_b, size_b);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaMalloc(&d_c, size_c);
+	if (errorCode != cudaSuccess) return errorCode;
 
-	cudaMemcpy(d_a, a, size_a, cudaMemcpyHostToDevice);
-	cudaMemcpy(d_b, b, size_b, cudaMemcpyHostToDevice);
+	errorCode = cudaMemcpy(d_a, a, size_a, cudaMemcpyHostToDevice);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaMemcpy(d_b, b, size_b, cudaMemcpyHostToDevice);
+	if (errorCode != cudaSuccess) return errorCode;
 
 	// C(m,n) = A(m,k) * B(k,n)
 	// cuBLAS was written with FORTRAN in mind, which uses a column-major notation for matrices.
@@ -81,27 +89,36 @@ void cuda_blas_matrix_multiply(
 		&beta,
 		d_c, col_b);
 
-	cudaMemcpy(c, d_c, size_c, cudaMemcpyDeviceToHost);
+	errorCode = cudaMemcpy(c, d_c, size_c, cudaMemcpyDeviceToHost);
+	if (errorCode != cudaSuccess) return errorCode;
 
-	cudaFree(d_a);
-	cudaFree(d_b);
-	cudaFree(d_c);
+	errorCode = cudaFree(d_a);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaFree(d_b);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaFree(d_c);
+	if (errorCode != cudaSuccess) return errorCode;
 
 	cublasDestroy(handle);
+
+	return cudaSuccess;
 }
 
-void cuda_blas_matrix_multiply(
-	unsigned int device_id,
-	unsigned int transa_op, unsigned int transb_op,
-	int m, int n, int k,
+cudaError_t cuda_blas_matrix_multiply(
+	int32_t device_id,
+	int32_t transa_op, int32_t transb_op,
+	int32_t m, int32_t n, int32_t k,
 	double alpha,
 	double *a,
 	double *b,
 	double beta,
 	double *c) {
-	cudaError_t gpu_device = cudaSetDevice(device_id);
+	cudaError_t errorCode = cudaSetDevice(device_id);
+	if (errorCode != cudaSuccess) return errorCode;
+
 	cudaDeviceProp prop;
-	cudaGetDeviceProperties(&prop, device_id);
+	errorCode = cudaGetDeviceProperties(&prop, device_id);
+	if (errorCode != cudaSuccess) return errorCode;
 
 	// A(m,k)
 	int row_a = m;
@@ -137,12 +154,17 @@ void cuda_blas_matrix_multiply(
 	size_t size_c = row_c * col_c * sizeof(double);
 
 	// C(m,n) = A(m,k) * B(k,n)
-	cudaMalloc(&d_a, size_a);
-	cudaMalloc(&d_b, size_b);
-	cudaMalloc(&d_c, size_c);
+	errorCode = cudaMalloc(&d_a, size_a);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaMalloc(&d_b, size_b);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaMalloc(&d_c, size_c);
+	if (errorCode != cudaSuccess) return errorCode;
 
-	cudaMemcpy(d_a, a, size_a, cudaMemcpyHostToDevice);
-	cudaMemcpy(d_b, b, size_b, cudaMemcpyHostToDevice);
+	errorCode = cudaMemcpy(d_a, a, size_a, cudaMemcpyHostToDevice);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaMemcpy(d_b, b, size_b, cudaMemcpyHostToDevice);
+	if (errorCode != cudaSuccess) return errorCode;
 
 	// C(m,n) = A(m,k) * B(k,n)
 	// cuBLAS was written with FORTRAN in mind, which uses a column-major notation for matrices.
@@ -161,35 +183,43 @@ void cuda_blas_matrix_multiply(
 		&beta,
 		d_c, col_b);
 
-	cudaMemcpy(c, d_c, size_c, cudaMemcpyDeviceToHost);
+	errorCode = cudaMemcpy(c, d_c, size_c, cudaMemcpyDeviceToHost);
+	if (errorCode != cudaSuccess) return errorCode;
 
-	cudaFree(d_a);
-	cudaFree(d_b);
-	cudaFree(d_c);
+	errorCode = cudaFree(d_a);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaFree(d_b);
+	if (errorCode != cudaSuccess) return errorCode;
+	errorCode = cudaFree(d_c);
+	if (errorCode != cudaSuccess) return errorCode;
 
 	cublasDestroy(handle);
+
+	return cudaSuccess;
 }
 
-extern "C" __declspec(dllexport) void MatrixMultiplyFloat(
-	unsigned int device_id,
-	unsigned int transa_op, unsigned int transb_op,
-	int m, int n, int k,
-	float alpha,
-	float *a,
-	float *b,
-	float beta,
-	float *c) {
-	cuda_blas_matrix_multiply(device_id, transa_op, transb_op, m, n, k, alpha, a, b, beta, c);
-}
+extern "C" {
+	__declspec(dllexport) int MatrixMultiplyFloat(
+		int32_t device_id,
+		int32_t transa_op, int32_t transb_op,
+		int32_t m, int32_t n, int32_t k,
+		float alpha,
+		float *a,
+		float *b,
+		float beta,
+		float *c) {
+		return marshal_cuda_error(cuda_blas_matrix_multiply(device_id, transa_op, transb_op, m, n, k, alpha, a, b, beta, c));
+	}
 
-extern "C" __declspec(dllexport) void MatrixMultiplyDouble(
-	unsigned int device_id,
-	unsigned int transa_op, unsigned int transb_op,
-	int m, int n, int k,
-	double alpha,
-	double *a,
-	double *b,
-	double beta,
-	double *c) {
-	cuda_blas_matrix_multiply(device_id, transa_op, transb_op, m, n, k, alpha, a, b, beta, c);
+	__declspec(dllexport) int MatrixMultiplyDouble(
+		int32_t device_id,
+		int32_t transa_op, int32_t transb_op,
+		int32_t m, int32_t n, int32_t k,
+		double alpha,
+		double *a,
+		double *b,
+		double beta,
+		double *c) {
+		return marshal_cuda_error(cuda_blas_matrix_multiply(device_id, transa_op, transb_op, m, n, k, alpha, a, b, beta, c));
+	}
 }

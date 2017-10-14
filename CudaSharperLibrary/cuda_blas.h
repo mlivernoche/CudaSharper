@@ -8,43 +8,46 @@
 #include "device_functions.h"
 #include <iostream>
 
-#define IDX2C(i,j,ld) (((j)*(ld))+(i))
+#include "DeviceInfo.h"
 
-cublasOperation_t cuda_blas_determine_op(unsigned int op);
+cublasOperation_t cuda_blas_determine_op(int32_t op);
 
-void cuda_blas_matrix_multiply(
-	unsigned int device_id,
-	unsigned int transa_op, unsigned int transb_op,
-	int m, int n, int k,
+cudaError_t cuda_blas_matrix_multiply(
+	int32_t device_id,
+	int32_t transa_op, int32_t transb_op,
+	int32_t m, int32_t n, int32_t k,
 	float alpha,
 	float *a,
 	float *b,
 	float beta,
 	float *c);
-void cuda_blas_matrix_multiply(
-	unsigned int device_id,
-	unsigned int transa_op, unsigned int transb_op,
-	int m, int n, int k,
+cudaError_t cuda_blas_matrix_multiply(
+	int32_t device_id,
+	int32_t transa_op, int32_t transb_op,
+	int32_t m, int32_t n, int32_t k,
 	double alpha,
 	double *a,
 	double *b,
 	double beta,
 	double *c);
-extern "C" __declspec(dllexport) void MatrixMultiplyFloat(
-	unsigned int device_id,
-	unsigned int transa_op, unsigned int transb_op,
-	int m, int n, int k,
-	float alpha,
-	float *a,
-	float *b,
-	float beta,
-	float *c);
-extern "C" __declspec(dllexport) void MatrixMultiplyDouble(
-	unsigned int device_id,
-	unsigned int transa_op, unsigned int transb_op,
-	int m, int n, int k,
-	double alpha,
-	double *a,
-	double *b,
-	double beta,
-	double *c);
+extern "C" {
+	__declspec(dllexport) int MatrixMultiplyFloat(
+		int32_t device_id,
+		int32_t transa_op, int32_t transb_op,
+		int32_t m, int32_t n, int32_t k,
+		float alpha,
+		float *a,
+		float *b,
+		float beta,
+		float *c);
+
+	__declspec(dllexport) int MatrixMultiplyDouble(
+		int32_t device_id,
+		int32_t transa_op, int32_t transb_op,
+		int32_t m, int32_t n, int32_t k,
+		double alpha,
+		double *a,
+		double *b,
+		double beta,
+		double *c);
+}
