@@ -17,12 +17,14 @@ using System.Threading;
 
 namespace CudaSharper
 {
-    public static class CudaSettings
+    public class CudaSettings : IDisposable
     {
         private static bool WorkingDirSet { get; set; } = false;
         private static object LoadingLock { get; set; } = new object();
 
         public static int CudaDeviceCount { get; private set; } = 0;
+
+        public static string Version => "v0.2.1";
 
         public static void Load(string working_directory)
         {
@@ -31,15 +33,64 @@ namespace CudaSharper
                 if (WorkingDirSet)
                     return;
 
-                Environment.SetEnvironmentVariable("PATH", Environment.GetEnvironmentVariable("PATH") + working_directory);
-                CudaDeviceCount = SafeNativeMethods.GetCudaDeviceCount();
-                WorkingDirSet = true;
+                Environment.SetEnvironmentVariable("PATH", System.Environment.GetEnvironmentVariable("PATH") + working_directory, EnvironmentVariableTarget.Process);
+                try
+                {
+                    CudaDeviceCount = SafeNativeMethods.GetCudaDeviceCount();
+                    DTM.InitializeCudaContext();
+                    WorkingDirSet = true;
+                }
+                catch (DllNotFoundException e)
+                {
+                    Console.WriteLine(Environment.GetEnvironmentVariable("PATH"));
+                    Console.WriteLine(e.Message);
+                    throw e;
+                }
             }
         }
 
-        internal static void Load()
+        public static void Load()
         {
             Load(AppDomain.CurrentDomain.BaseDirectory);
         }
+
+        #region IDisposable Support
+        private bool disposedValue = false; // To detect redundant calls
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    // TODO: dispose managed state (managed objects).
+                }
+
+                // TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
+                // TODO: set large fields to null.
+
+                DTM.ResetCudaDevice();
+                //SafeNativeMethods.cuStats_Dispose();
+
+                disposedValue = true;
+            }
+        }
+
+        // TODO: override a finalizer only if Dispose(bool disposing) above has code to free unmanaged resources.
+        ~CudaSettings()
+        {
+            // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+            Dispose(false);
+        }
+
+        // This code added to correctly implement the disposable pattern.
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+            Dispose(true);
+            // TODO: uncomment the following line if the finalizer is overridden above.
+            GC.SuppressFinalize(this);
+        }
+        #endregion
     }
 }

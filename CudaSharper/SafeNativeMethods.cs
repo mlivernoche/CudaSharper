@@ -1,110 +1,109 @@
-﻿using System.Runtime.InteropServices;
+﻿using System;
+using System.Runtime.InteropServices;
 using System.Text;
 
 /*
- * CudaSharper - a wrapper for CUDA-accelerated functions. CudaSharper is not intended to write CUDA in C#, but rather a
- * library that allows one to easily use CUDA-accelerated functions without having to directly interact with the device.
- * This file acts as a wrapper for CudaSharperLibrary.dll, which is required for these functions to run. CudaSharperLibrary.dll
- * is the actual CUDA C code compiled as a C++/CLI assembly; however, it is unmanaged and therefore requires this wrapper to be used
- * in C# projects.
+ * SaveNativeMethods - these call directly to methods specified in CudaSharperLibrary.dll.
+ * The types used here must be CLS-compliant and they must be specific.
+ * They must align with what is defined in the C++ code; e.g., int64_t must be mirrored with Int64.
+ * These methods are as raw as possible - any sort of type translation should be done in DTM.
  * 
- * Current Classes:
- * - CudaSettings: Initialization class.
- * - Cuda: Array functions, such as SplitArray and AddArrays
- * - CuRand: cuRAND functions; allows the generation of pseudorandom number sets using uniform, normal, or poisson distributions.
+ * Example: CUDA provides cudaError_t, which is an error code that each function returns. It is an int enum.
+ * Enums are not blittable, but ints are. The C++ code takes the cudaError_t, casts it to an int, and returns it.
+ * This is why all of these methods have an int return value. DTM is where that int is then cast back to an enum,
+ * which is defined in C# as CudaError.
+ * 
+ * Rules for adding a method:
+ * - DO use Int32 instead of int and Int64 instead of long.
+ * - DO make ALL methods return Int32 (and no tuples).
+ * - DO make ALL methods internal (absolutely no public methods).
+ * - DO make device_id the first parameter.
+ * - DO make device_id Int32.
+ * - DO make the size of the array follow the array (e.g., Method(float[] arr, Int32 arr_size)).
+ * - DO NOT use uint, ulong, etc.
+ * - DO NOT generics.
+ * - DO NOT use Int16 or byte/sbyte.
  */
 
 namespace CudaSharper
 {
-    internal static partial class SafeNativeMethods
+    internal static class SafeNativeMethods
     {
         #region CudaDevice.cs
-        [DllImport("CudaSharperLibrary.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode, ThrowOnUnmappableChar = true)]
-        internal static extern void GetCudaDeviceName(int device_id, StringBuilder device_name_ptr);
+        [DllImport(
+            "CudaSharperLibrary.dll",
+            EntryPoint = "GetCudaDeviceName",
+            CallingConvention = CallingConvention.Cdecl,
+            CharSet = CharSet.Ansi,
+            BestFitMapping = true,
+            ThrowOnUnmappableChar = true)]
+        internal static extern Int32 GetCudaDeviceName(Int32 device_id, StringBuilder device_name_ptr);
         #endregion
 
         #region CudaSettings.cs
-        [DllImport("CudaSharperLibrary.dll")]
-        internal static extern int GetCudaDeviceCount();
+        [DllImport("CudaSharperLibrary.dll", EntryPoint = "InitializeCudaContext")]
+        internal static extern Int32 InitializeCudaContext();
+
+        [DllImport("CudaSharperLibrary.dll", EntryPoint = "GetCudaDeviceCount")]
+        internal static extern Int32 GetCudaDeviceCount();
+
+        [DllImport("CudaSharperLibrary.dll", EntryPoint = "ResetCudaDevice")]
+        internal static extern Int32 ResetCudaDevice();
         #endregion
 
         #region CuRand.cs
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void UniformRand(int device_id, int amount_of_numbers, float[] result);
+        internal static extern Int32 UniformRand(Int32 device_id, float[] result, Int64 amount_of_numbers);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void UniformRandDouble(int device_id, int amount_of_numbers, double[] result);
+        internal static extern Int32 UniformRandDouble(Int32 device_id, double[] result, Int64 amount_of_numbers);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void LogNormalRand(int device_id, int amount_of_numbers, float[] result, float mean, float stddev);
+        internal static extern Int32 LogNormalRand(Int32 device_id, float[] result, Int64 amount_of_numbers, float mean, float stddev);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void LogNormalRandDouble(int device_id, int amount_of_numbers, double[] result, float mean, float stddev);
+        internal static extern Int32 LogNormalRandDouble(Int32 device_id, double[] result, Int64 amount_of_numbers, float mean, float stddev);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void NormalRand(int device_id, int amount_of_numbers, float[] result);
+        internal static extern Int32 NormalRand(Int32 device_id, float[] result, Int64 amount_of_numbers);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void NormalRandDouble(int device_id, int amount_of_numbers, double[] result);
+        internal static extern Int32 NormalRandDouble(Int32 device_id, double[] result, Int64 amount_of_numbers);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void PoissonRand(int device_id, int amount_of_numbers, int[] result, double lambda);
+        internal static extern Int32 PoissonRand(Int32 device_id, Int32[] result, Int64 amount_of_numbers, double lambda);
         #endregion
 
         #region CuArray.cs
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void SplitIntArray(int device_id, int[] src, int[] array1, int[] array2, uint length, uint split_index);
+        internal static extern Int32 AddIntArrays(Int32 device_id, Int32[] result, Int32[] array1, Int32[] array2, Int64 length);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void SplitLongArray(int device_id, long[] src, long[] array1, long[] array2, uint length, uint split_index);
+        internal static extern Int32 AddLongArrays(Int32 device_id, Int64[] result, Int64[] array1, Int64[] array2, Int64 length);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void SplitFloatArray(int device_id, float[] src, float[] array1, float[] array2, uint length, uint split_index);
+        internal static extern Int32 AddFloatArrays(Int32 device_id, float[] result, float[] array1, float[] array2, Int64 length);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void SplitDoubleArray(int device_id, double[] src, double[] array1, double[] array2, uint length, uint split_index);
+        internal static extern Int32 AddDoubleArrays(Int32 device_id, double[] result, double[] array1, double[] array2, Int64 length);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void MergeIntArrays(int device_id, int[] result, int[] array1, int[] array2, uint array1_length, uint array2_length);
+        internal static extern Int32 SubtractIntArrays(Int32 device_id, Int32[] result, Int32[] array1, Int32[] array2, Int64 length);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void MergeLongArrays(int device_id, long[] result, long[] array1, long[] array2, uint array1_length, uint array2_length);
+        internal static extern Int32 SubtractFloatArrays(Int32 device_id, float[] result, float[] array1, float[] array2, Int64 length);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void MergeFloatArrays(int device_id, float[] result, float[] array1, float[] array2, int array1_length, int array2_length);
+        internal static extern Int32 SubtractLongArrays(Int32 device_id, Int64[] result, Int64[] array1, Int64[] array2, Int64 length);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void MergeDoubleArrays(int device_id, double[] result, double[] array1, double[] array2, int array1_length, int array2_length);
+        internal static extern Int32 SubtractDoubleArrays(Int32 device_id, double[] result, double[] array1, double[] array2, Int64 length);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void AddIntArrays(int device_id, int[] result, int[] array1, int[] array2, int length);
-
-        [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void AddLongArrays(int device_id, long[] result, long[] array1, long[] array2, int length);
-
-        [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void AddFloatArrays(int device_id, float[] result, float[] array1, float[] array2, int length);
-
-        [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void AddDoubleArrays(int device_id, double[] result, double[] array1, double[] array2, int length);
-
-        [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void SubtractIntArrays(int device_id, int[] result, int[] array1, int[] array2, int length);
-
-        [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void SubtractFloatArrays(int device_id, float[] result, float[] array1, float[] array2, int length);
-
-        [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void SubtractLongArrays(int device_id, long[] result, long[] array1, long[] array2, int length);
-
-        [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void SubtractDoubleArrays(int device_id, double[] result, double[] array1, double[] array2, int length);
-
-        [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void MatrixMultiplyFloat(
-            uint device_id,
-            uint transa_op, uint transb_op,
-            int m, int n, int k,
+        internal static extern Int32 MatrixMultiplyFloat(
+            Int32 device_id,
+            Int32 transa_op, Int32 transb_op,
+            Int32 m, Int32 n, Int32 k,
             float alpha,
             float[] a,
             float[] b,
@@ -112,10 +111,10 @@ namespace CudaSharper
             float[] c);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern void MatrixMultiplyDouble(
-            uint device_id,
-            uint transa_op, uint transb_op,
-            int m, int n, int k,
+        internal static extern Int32 MatrixMultiplyDouble(
+            Int32 device_id,
+            Int32 transa_op, Int32 transb_op,
+            Int32 m, Int32 n, Int32 k,
             double alpha,
             double[] a,
             double[] b,
@@ -125,34 +124,34 @@ namespace CudaSharper
 
         #region cuStats.cs
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern double SampleStandardDeviationFloat(uint device_id, float[] sample, ulong sample_size, double mean);
+        internal static extern Int32 SampleStandardDeviationFloat(Int32 device_id, ref double result, float[] sample, Int64 sample_size, float mean);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern double SampleStandardDeviationDouble(uint device_id, double[] sample, ulong sample_size, double mean);
+        internal static extern Int32 SampleStandardDeviationDouble(Int32 device_id, ref double result, double[] sample, Int64 sample_size, double mean);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern double StandardDeviationFloat(uint device_id, float[] sample, ulong sample_size, double mean);
+        internal static extern Int32 StandardDeviationFloat(Int32 device_id, ref double result, float[] sample, Int64 sample_size, float mean);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern double StandardDeviationDouble(uint device_id, double[] sample, ulong sample_size, double mean);
+        internal static extern Int32 StandardDeviationDouble(Int32 device_id, ref double result, double[] sample, Int64 sample_size, double mean);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern double SampleCovarianceFloat(uint device_id, float[] x_array, double x_mean, float[] y_array, double y_mean, ulong sample_size);
+        internal static extern Int32 SampleCovarianceFloat(Int32 device_id, ref double result, float[] x_array, float x_mean, float[] y_array, float y_mean, Int64 sample_size);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern double SampleCovarianceDouble(uint device_id, double[] x_array, double x_mean, double[] y_array, double y_mean, ulong sample_size);
+        internal static extern Int32 SampleCovarianceDouble(Int32 device_id, ref double result, double[] x_array, double x_mean, double[] y_array, double y_mean, Int64 sample_size);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern double CovarianceDouble(uint device_id, double[] x_array, double x_mean, double[] y_array, double y_mean, ulong sample_size);
+        internal static extern Int32 CovarianceFloat(Int32 device_id, ref double result, float[] x_array, float x_mean, float[] y_array, float y_mean, Int64 sample_size);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern double CovarianceFloat(uint device_id, float[] x_array, double x_mean, float[] y_array, double y_mean, ulong sample_size);
+        internal static extern Int32 CovarianceDouble(Int32 device_id, ref double result, double[] x_array, double x_mean, double[] y_array, double y_mean, Int64 sample_size);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern double PearsonCorrelationFloat(uint device_id, float[] x_array, double x_mean, float[] y_array, double y_mean, ulong sample_size);
+        internal static extern Int32 PearsonCorrelationFloat(Int32 device_id, ref double result, float[] x_array, float x_mean, float[] y_array, float y_mean, Int64 sample_size);
 
         [DllImport("CudaSharperLibrary.dll")]
-        internal static extern double PearsonCorrelationDouble(uint device_id, double[] x_array, double x_mean, double[] y_array, double y_mean, ulong sample_size);
+        internal static extern Int32 PearsonCorrelationDouble(Int32 device_id, ref double result, double[] x_array, double x_mean, double[] y_array, double y_mean, Int64 sample_size);
         #endregion
     }
 }

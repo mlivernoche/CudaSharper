@@ -35,9 +35,12 @@ namespace CudaSharper
 
         public string GetCudaDeviceName()
         {
-            StringBuilder device_name = new StringBuilder(128);
-            SafeNativeMethods.GetCudaDeviceName(DeviceId, device_name);
-            return device_name.ToString();
+            var result = DTM.GetCudaDeviceName(DeviceId);
+
+            if (result.Error != CudaError.Success)
+                throw new Exception("Failed to get GPU name! Error provided: " + result.Error.ToString());
+
+            return result.Result;
         }
     }
 }
