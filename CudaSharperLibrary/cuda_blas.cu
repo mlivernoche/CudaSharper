@@ -11,14 +11,14 @@ cublasOperation_t cuda_blas_determine_op(int32_t op) {
 }
 
 cudaError_t cuda_blas_matrix_multiply(
-	int32_t device_id,
-	int32_t transa_op, int32_t transb_op,
-	int32_t m, int32_t n, int32_t k,
-	float alpha,
-	float *a,
-	float *b,
-	float beta,
-	float *c) {
+	const int32_t device_id,
+	const int32_t transa_op, const int32_t transb_op,
+	const int32_t m, const int32_t n, const int32_t k,
+	const float alpha,
+	const float* __restrict a,
+	const float* __restrict b,
+	const float beta,
+	float* __restrict c) {
 	cudaError_t errorCode = cudaSetDevice(device_id);
 	if (errorCode != cudaSuccess) return errorCode;
 
@@ -105,14 +105,14 @@ cudaError_t cuda_blas_matrix_multiply(
 }
 
 cudaError_t cuda_blas_matrix_multiply(
-	int32_t device_id,
-	int32_t transa_op, int32_t transb_op,
-	int32_t m, int32_t n, int32_t k,
-	double alpha,
-	double *a,
-	double *b,
-	double beta,
-	double *c) {
+	const int32_t device_id,
+	const int32_t transa_op, const int32_t transb_op,
+	const int32_t m, const int32_t n, const int32_t k,
+	const double alpha,
+	const double* __restrict a,
+	const double* __restrict b,
+	const double beta,
+	double* __restrict c) {
 	cudaError_t errorCode = cudaSetDevice(device_id);
 	if (errorCode != cudaSuccess) return errorCode;
 

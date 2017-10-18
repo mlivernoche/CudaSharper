@@ -16,6 +16,11 @@ public:
 	static cudaError_t reset_cuda_device();
 
 	explicit DeviceInfo() {
+		if (DeviceInfo::get_cuda_device_count() > 0) {
+			DeviceInfo::is_device_prop_initialized = (std::atomic<bool>*)malloc(sizeof(std::atomic<bool>) * num);
+			DeviceInfo::properties = (cudaDeviceProp*)malloc(sizeof(cudaDeviceProp) * num);
+		}
+
 		DeviceInfo::intialize_cuda_context();
 	}
 

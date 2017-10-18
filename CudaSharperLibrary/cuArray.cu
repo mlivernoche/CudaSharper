@@ -31,31 +31,31 @@ void cuArray::determine_launch_parameters(int32_t* blocks, int32_t* threads, con
 Functions for adding two arrays together. Requires CUDA 8.0.
 */
 
-__global__ void cuArray_add_arrays_kernel(int32_t *a, int32_t *b, const int64_t array_count) {
+__global__ void cuArray_add_arrays_kernel(int32_t* __restrict a, const int32_t* __restrict b, const int64_t array_count) {
 	for (int i = threadIdx.x + (blockIdx.x * blockDim.x); i < array_count; i += blockDim.x * gridDim.x) {
 		a[i] += b[i];
 	}
 }
 
-__global__ void cuArray_add_arrays_kernel(float *a, float *b, const int64_t array_count) {
+__global__ void cuArray_add_arrays_kernel(int64_t* __restrict a, const int64_t* __restrict b, const int64_t array_count) {
 	for (int i = threadIdx.x + (blockIdx.x * blockDim.x); i < array_count; i += blockDim.x * gridDim.x) {
 		a[i] += b[i];
 	}
 }
 
-__global__ void cuArray_add_arrays_kernel(double *a, double *b, const int64_t array_count) {
+__global__ void cuArray_add_arrays_kernel(float* __restrict a, const float* __restrict b, const int64_t array_count) {
 	for (int i = threadIdx.x + (blockIdx.x * blockDim.x); i < array_count; i += blockDim.x * gridDim.x) {
 		a[i] += b[i];
 	}
 }
 
-__global__ void cuArray_add_arrays_kernel(int64_t *a, int64_t *b, const int64_t array_count) {
+__global__ void cuArray_add_arrays_kernel(double* __restrict a, const double* __restrict b, const int64_t array_count) {
 	for (int i = threadIdx.x + (blockIdx.x * blockDim.x); i < array_count; i += blockDim.x * gridDim.x) {
 		a[i] += b[i];
 	}
 }
 
-template<typename T> cudaError_t cuArray::add_arrays(int32_t device_id, T *result, T *array1, T *array2, const int64_t full_idx) {
+template<typename T> cudaError_t cuArray::add_arrays(const int32_t device_id, T* __restrict result, const T* __restrict array1, const T* __restrict array2, const int64_t full_idx) {
 	cudaError_t errorCode = cudaSetDevice(device_id);
 	if (errorCode != cudaSuccess) return errorCode;
 
@@ -94,16 +94,16 @@ template<typename T> cudaError_t cuArray::add_arrays(int32_t device_id, T *resul
 }
 
 extern "C" {
-	__declspec(dllexport) int AddIntArrays(int32_t device_id, int32_t *result, int32_t *array1, int32_t *array2, const int64_t full_idx) {
+	__declspec(dllexport) int32_t AddIntArrays(int32_t device_id, int32_t *result, int32_t *array1, int32_t *array2, const int64_t full_idx) {
 		return marshal_cuda_error(cuArray::add_arrays<int32_t>(device_id, result, array1, array2, full_idx));
 	}
-	__declspec(dllexport) int AddFloatArrays(int32_t device_id, float *result, float *array1, float *array2, const int64_t full_idx) {
+	__declspec(dllexport) int32_t AddFloatArrays(int32_t device_id, float *result, float *array1, float *array2, const int64_t full_idx) {
 		return marshal_cuda_error(cuArray::add_arrays<float>(device_id, result, array1, array2, full_idx));
 	}
-	__declspec(dllexport) int AddLongArrays(int32_t device_id, int64_t *result, int64_t *array1, int64_t *array2, const int64_t full_idx) {
+	__declspec(dllexport) int32_t AddLongArrays(int32_t device_id, int64_t *result, int64_t *array1, int64_t *array2, const int64_t full_idx) {
 		return marshal_cuda_error(cuArray::add_arrays<int64_t>(device_id, result, array1, array2, full_idx));
 	}
-	__declspec(dllexport) int AddDoubleArrays(int32_t device_id, double *result, double *array1, double *array2, const int64_t full_idx) {
+	__declspec(dllexport) int32_t AddDoubleArrays(int32_t device_id, double *result, double *array1, double *array2, const int64_t full_idx) {
 		return marshal_cuda_error(cuArray::add_arrays<double>(device_id, result, array1, array2, full_idx));
 	}
 }
@@ -112,31 +112,31 @@ extern "C" {
 * Kernels and functions for subtracting two arrays.
 */
 
-__global__ void cuArray_subtract_arrays_kernel(int32_t *a, int32_t *b, const int64_t array_count) {
+__global__ void cuArray_subtract_arrays_kernel(int32_t* __restrict a, const int32_t* __restrict b, const int64_t array_count) {
 	for (int i = threadIdx.x + (blockIdx.x * blockDim.x); i < array_count; i += blockDim.x * gridDim.x) {
 		a[i] -= b[i];
 	}
 }
 
-__global__ void cuArray_subtract_arrays_kernel(float *a, float *b, const int64_t array_count) {
+__global__ void cuArray_subtract_arrays_kernel(int64_t* __restrict a, const int64_t* __restrict b, const int64_t array_count) {
 	for (int i = threadIdx.x + (blockIdx.x * blockDim.x); i < array_count; i += blockDim.x * gridDim.x) {
 		a[i] -= b[i];
 	}
 }
 
-__global__ void cuArray_subtract_arrays_kernel(double *a, double *b, const int64_t array_count) {
+__global__ void cuArray_subtract_arrays_kernel(float* __restrict a, const float* __restrict b, const int64_t array_count) {
 	for (int i = threadIdx.x + (blockIdx.x * blockDim.x); i < array_count; i += blockDim.x * gridDim.x) {
 		a[i] -= b[i];
 	}
 }
 
-__global__ void cuArray_subtract_arrays_kernel(int64_t *a, int64_t *b, const int64_t array_count) {
+__global__ void cuArray_subtract_arrays_kernel(double* __restrict a, const double* __restrict b, const int64_t array_count) {
 	for (int i = threadIdx.x + (blockIdx.x * blockDim.x); i < array_count; i += blockDim.x * gridDim.x) {
 		a[i] -= b[i];
 	}
 }
 
-template<typename T> cudaError_t cuArray::subtract_arrays(int32_t device_id, T *result, T *array1, T *array2, const int64_t full_idx) {
+template<typename T> cudaError_t cuArray::subtract_arrays(const int32_t device_id, T* __restrict result, const T* __restrict array1, const T* __restrict array2, const int64_t full_idx) {
 	cudaError_t errorCode = cudaSetDevice(device_id);
 	if (errorCode != cudaSuccess) return errorCode;
 

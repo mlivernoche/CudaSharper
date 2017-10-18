@@ -8,13 +8,13 @@
 // For Kepler, we have to double the amount of threads to achieve 100% occupancy.
 #define CURAND_NUM_OF_THREADS 64
 
-void cuda_rand::determine_launch_parameters(int32_t* blocks, int32_t* threads, const int64_t array_size, const int32_t max_block_size, const int32_t max_thread_size) {
+void cuda_rand::determine_launch_parameters(int32_t* __restrict blocks, int32_t* __restrict threads, const int64_t array_size, const int32_t max_block_size, const int32_t max_thread_size) {
 	if (*blocks * *threads < array_size) {
-		if ((*blocks * 2) <= max_block_size) {
+		if ((*blocks * 2) < max_block_size) {
 			*blocks = (*blocks * 2);
 			cuda_rand::determine_launch_parameters(blocks, threads, array_size, max_block_size, max_thread_size);
 		}
-		else if ((*threads * 2) <= max_block_size) {
+		else if ((*threads * 2) < max_thread_size) {
 			*threads = (*threads * 2);
 			cuda_rand::determine_launch_parameters(blocks, threads, array_size, max_block_size, max_thread_size);
 		}
@@ -28,7 +28,7 @@ int64_t cuda_rand::time_seed() {
 	return std::chrono::system_clock::now().time_since_epoch().count();
 }
 
-__global__ void cuda_rand_uniform_rand_kernel(int64_t seed, float *numbers, const int64_t maximum) {
+__global__ void cuda_rand_uniform_rand_kernel(const int64_t seed, float* __restrict numbers, const int64_t maximum) {
 	extern __shared__ curandState_t curandStateShared[];
 
 	int xid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -39,7 +39,7 @@ __global__ void cuda_rand_uniform_rand_kernel(int64_t seed, float *numbers, cons
 	}
 }
 
-cudaError_t cuda_rand::uniform_rand(int32_t device_id, const int64_t amount_of_numbers, float *result) {
+cudaError_t cuda_rand::uniform_rand(const int32_t device_id, const int64_t amount_of_numbers, float* __restrict result) {
 	cudaError_t errorCode = cudaSetDevice(device_id);
 	if (errorCode != cudaSuccess) return errorCode;
 
@@ -84,7 +84,7 @@ cudaError_t cuda_rand::uniform_rand(int32_t device_id, const int64_t amount_of_n
 	return cudaSuccess;
 }
 
-__global__ void cuda_rand_uniform_rand_double_kernel(int64_t seed, double *numbers, const int64_t maximum) {
+__global__ void cuda_rand_uniform_rand_double_kernel(const int64_t seed, double* __restrict numbers, const int64_t maximum) {
 	extern __shared__ curandState_t curandStateShared[];
 
 	int xid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -95,7 +95,7 @@ __global__ void cuda_rand_uniform_rand_double_kernel(int64_t seed, double *numbe
 	}
 }
 
-cudaError_t cuda_rand::uniform_rand_double(int32_t device_id, const int64_t amount_of_numbers, double *result) {
+cudaError_t cuda_rand::uniform_rand_double(const int32_t device_id, const int64_t amount_of_numbers, double* __restrict result) {
 	cudaError_t errorCode = cudaSetDevice(device_id);
 	if (errorCode != cudaSuccess) return errorCode;
 
@@ -138,7 +138,7 @@ cudaError_t cuda_rand::uniform_rand_double(int32_t device_id, const int64_t amou
 	return cudaSuccess;
 }
 
-__global__ void cuda_rand_normal_rand_kernel(int64_t seed, float *numbers, const int64_t maximum) {
+__global__ void cuda_rand_normal_rand_kernel(const int64_t seed, float* __restrict numbers, const int64_t maximum) {
 	extern __shared__ curandState_t curandStateShared[];
 
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -158,7 +158,7 @@ __global__ void cuda_rand_normal_rand_kernel(int64_t seed, float *numbers, const
 	}
 }
 
-cudaError_t cuda_rand::normal_rand(int32_t device_id, const int64_t amount_of_numbers, float *result) {
+cudaError_t cuda_rand::normal_rand(const int32_t device_id, const int64_t amount_of_numbers, float* __restrict result) {
 	cudaError_t errorCode = cudaSetDevice(device_id);
 	if (errorCode != cudaSuccess) return errorCode;
 
@@ -206,7 +206,7 @@ cudaError_t cuda_rand::normal_rand(int32_t device_id, const int64_t amount_of_nu
 	return cudaSuccess;
 }
 
-__global__ void cuda_rand_normal_rand_double_kernel(int64_t seed, double *numbers, const int64_t maximum) {
+__global__ void cuda_rand_normal_rand_double_kernel(const int64_t seed, double* __restrict numbers, const int64_t maximum) {
 	extern __shared__ curandState_t curandStateShared[];
 
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -222,7 +222,7 @@ __global__ void cuda_rand_normal_rand_double_kernel(int64_t seed, double *number
 	}
 }
 
-cudaError_t cuda_rand::normal_rand_double(int32_t device_id, const int64_t amount_of_numbers, double *result) {
+cudaError_t cuda_rand::normal_rand_double(const int32_t device_id, const int64_t amount_of_numbers, double* __restrict result) {
 	cudaError_t errorCode = cudaSetDevice(device_id);
 	if (errorCode != cudaSuccess) return errorCode;
 
@@ -267,7 +267,7 @@ cudaError_t cuda_rand::normal_rand_double(int32_t device_id, const int64_t amoun
 	return cudaSuccess;
 }
 
-__global__ void cuda_rand_log_normal_rand_kernel(int64_t seed, float *numbers, const int64_t maximum, float mean, float stddev) {
+__global__ void cuda_rand_log_normal_rand_kernel(const int64_t seed, float* __restrict numbers, const int64_t maximum, const float mean, const float stddev) {
 	extern __shared__ curandState_t curandStateShared[];
 
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -283,7 +283,7 @@ __global__ void cuda_rand_log_normal_rand_kernel(int64_t seed, float *numbers, c
 	}
 }
 
-cudaError_t cuda_rand::log_normal_rand(int32_t device_id, const int64_t amount_of_numbers, float *result, float mean, float stddev) {
+cudaError_t cuda_rand::log_normal_rand(const int32_t device_id, const int64_t amount_of_numbers, float* __restrict result, float mean, float stddev) {
 	cudaError_t errorCode = cudaSetDevice(device_id);
 	if (errorCode != cudaSuccess) return errorCode;
 
@@ -328,7 +328,7 @@ cudaError_t cuda_rand::log_normal_rand(int32_t device_id, const int64_t amount_o
 	return cudaSuccess;
 }
 
-__global__ void cuda_rand_log_normal_rand_double_kernel(int64_t seed, double *numbers, const int64_t maximum, double mean, double stddev) {
+__global__ void cuda_rand_log_normal_rand_double_kernel(const int64_t seed, double* __restrict numbers, const int64_t maximum, const double mean, const double stddev) {
 	extern __shared__ curandState_t curandStateShared[];
 
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -344,7 +344,7 @@ __global__ void cuda_rand_log_normal_rand_double_kernel(int64_t seed, double *nu
 	}
 }
 
-cudaError_t cuda_rand::log_normal_rand_double(int32_t device_id, const int64_t amount_of_numbers, double *result, double mean, double stddev) {
+cudaError_t cuda_rand::log_normal_rand_double(const int32_t device_id, const int64_t amount_of_numbers, double* __restrict result, double mean, double stddev) {
 	cudaError_t errorCode = cudaSetDevice(device_id);
 	if (errorCode != cudaSuccess) return errorCode;
 
@@ -389,7 +389,7 @@ cudaError_t cuda_rand::log_normal_rand_double(int32_t device_id, const int64_t a
 	return cudaSuccess;
 }
 
-__global__ void cuda_rand_poisson_rand_kernel(int64_t seed, int32_t *numbers, const int64_t maximum, double lambda) {
+__global__ void cuda_rand_poisson_rand_kernel(const int64_t seed, int32_t* __restrict numbers, const int64_t maximum, const double lambda) {
 	extern __shared__ curandState_t curandStateShared[];
 
 	int xid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -400,7 +400,7 @@ __global__ void cuda_rand_poisson_rand_kernel(int64_t seed, int32_t *numbers, co
 	}
 }
 
-cudaError_t cuda_rand::poisson_rand(int32_t device_id, const int64_t amount_of_numbers, int32_t *result, double lambda) {
+cudaError_t cuda_rand::poisson_rand(const int32_t device_id, const int64_t amount_of_numbers, int32_t* __restrict result, double lambda) {
 	cudaError_t errorCode = cudaSetDevice(device_id);
 	if (errorCode != cudaSuccess) return errorCode;
 

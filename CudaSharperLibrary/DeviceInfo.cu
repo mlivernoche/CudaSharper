@@ -1,5 +1,7 @@
 #include "DeviceInfo.h"
 
+const DeviceInfo device_info();
+
 int32_t marshal_cuda_error(cudaError_t error) {
 	return (int)error;
 }
@@ -27,9 +29,6 @@ cudaError_t DeviceInfo::intialize_cuda_context() {
 		cudaError_t errorCode;
 
 		if (num > 0) {
-			DeviceInfo::is_device_prop_initialized = (std::atomic<bool>*)malloc(sizeof(std::atomic<bool>) * num);
-			DeviceInfo::properties = (cudaDeviceProp*)malloc(sizeof(cudaDeviceProp) * num);
-
 			// This loads in the CUDA context and reduces the time needed to do things like cudaMalloc (subsequent calls will be faster regardless).
 			for (int i = 0; i < GetCudaDeviceCount(); i++) {
 				errorCode = cudaSetDevice(i);
@@ -46,7 +45,9 @@ cudaError_t DeviceInfo::intialize_cuda_context() {
 
 cudaError_t DeviceInfo::get_cuda_device_name(int32_t device_id, char* device_name_ptr) {
 	cudaDeviceProp prop;
-	cudaError_t errorCode = DeviceInfo::get_device_properties(device_id, &prop);
+	// The following isn't working correctly. Eventually, it should be used, because then we can save time calling cudaGetDeviceProperties
+	//cudaError_t errorCode = DeviceInfo::get_device_properties(device_id, &prop);
+	cudaError_t errorCode = cudaGetDeviceProperties(&prop, device_id);
 	if (errorCode != cudaSuccess) return errorCode;
 
 	// Length of cudaDeviceProp::name, according to current NVIDIA documentation: http://docs.nvidia.com/cuda/cuda-runtime-api/structcudaDeviceProp.html#structcudaDeviceProp_11e26f1c6bd42f4821b7ef1a4bd3bd25c
