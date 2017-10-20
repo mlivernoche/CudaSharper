@@ -37,7 +37,6 @@ namespace CudaSharper
                 try
                 {
                     CudaDeviceCount = SafeNativeMethods.GetCudaDeviceCount();
-                    DTM.InitializeCudaContext();
                     WorkingDirSet = true;
                 }
                 catch (DllNotFoundException e)

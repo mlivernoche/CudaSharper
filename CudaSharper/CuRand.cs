@@ -17,9 +17,10 @@ using System.Runtime.InteropServices;
 
 namespace CudaSharper
 {
-    public class CuRand : ICudaDevice
+    public sealed class CuRand : IDisposable
     {
         private ICudaDevice CudaDeviceComponent { get; }
+        private IntPtr PtrToUnmanagedClass { get; set; }
 
         public int DeviceId => CudaDeviceComponent.DeviceId;
 
@@ -28,19 +29,10 @@ namespace CudaSharper
             CudaSettings.Load();
         }
 
-        public CuRand(int device_id)
-        {
-            CudaDeviceComponent = new CudaDevice(device_id);
-        }
-
         public CuRand(CudaDevice device)
         {
-            CudaDeviceComponent = device;
-        }
-
-        public string GetCudaDeviceName()
-        {
-            return CudaDeviceComponent.GetCudaDeviceName();
+            CudaDeviceComponent = new CudaDevice(device.DeviceId, device.AllocationSize);
+            PtrToUnmanagedClass = SafeNativeMethods.CreateRandomClass(CudaDeviceComponent.DeviceId, CudaDeviceComponent.AllocationSize);
         }
 
         /// <summary>
@@ -52,7 +44,7 @@ namespace CudaSharper
         public ICudaResult<float[]> GenerateUniformDistribution(int amount_of_numbers)
         {
             var result = new float[amount_of_numbers];
-            var error = SafeNativeMethods.UniformRand(DeviceId, result, amount_of_numbers);
+            var error = SafeNativeMethods.UniformRand(PtrToUnmanagedClass, result, amount_of_numbers);
             return new CudaResult<float[]>(error, result);
         }
 
@@ -66,7 +58,7 @@ namespace CudaSharper
         public ICudaResult<double[]> GenerateUniformDistributionDP(int amount_of_numbers)
         {
             var result = new double[amount_of_numbers];
-            var error = SafeNativeMethods.UniformRandDouble(DeviceId, result, amount_of_numbers);
+            var error = SafeNativeMethods.UniformRandDouble(PtrToUnmanagedClass, result, amount_of_numbers);
             return new CudaResult<double[]>(error, result);
         }
 
@@ -79,7 +71,7 @@ namespace CudaSharper
         public ICudaResult<float[]> GenerateLogNormalDistribution(int amount_of_numbers, float mean, float stddev)
         {
             var result = new float[amount_of_numbers];
-            var error = SafeNativeMethods.LogNormalRand(DeviceId, result, amount_of_numbers, mean, stddev);
+            var error = SafeNativeMethods.LogNormalRand(PtrToUnmanagedClass, result, amount_of_numbers, mean, stddev);
             return new CudaResult<float[]>(error, result);
         }
 
@@ -95,7 +87,7 @@ namespace CudaSharper
         public ICudaResult<double[]> GenerateLogNormalDistributionDP(int amount_of_numbers, float mean, float stddev)
         {
             var result = new double[amount_of_numbers];
-            var error = SafeNativeMethods.LogNormalRandDouble(DeviceId, result, amount_of_numbers, mean, stddev);
+            var error = SafeNativeMethods.LogNormalRandDouble(PtrToUnmanagedClass, result, amount_of_numbers, mean, stddev);
             return new CudaResult<double[]>(error, result);
         }
 
@@ -108,7 +100,7 @@ namespace CudaSharper
         public ICudaResult<float[]> GenerateNormalDistribution(int amount_of_numbers)
         {
             var result = new float[amount_of_numbers];
-            var error = SafeNativeMethods.NormalRand(DeviceId, result, amount_of_numbers);
+            var error = SafeNativeMethods.NormalRand(PtrToUnmanagedClass, result, amount_of_numbers);
             return new CudaResult<float[]>(error, result);
         }
 
@@ -122,15 +114,56 @@ namespace CudaSharper
         public ICudaResult<double[]> GenerateNormalDistributionDP(int amount_of_numbers)
         {
             var result = new double[amount_of_numbers];
-            var error = SafeNativeMethods.NormalRandDouble(DeviceId, result, amount_of_numbers);
+            var error = SafeNativeMethods.NormalRandDouble(PtrToUnmanagedClass, result, amount_of_numbers);
             return new CudaResult<double[]>(error, result);
         }
 
         public ICudaResult<int[]> GeneratePoissonDistribution(int amount_of_numbers, double lambda)
         {
             var result = new int[amount_of_numbers];
-            var error = SafeNativeMethods.PoissonRand(DeviceId, result, amount_of_numbers, lambda);
+            var error = SafeNativeMethods.PoissonRand(PtrToUnmanagedClass, result, amount_of_numbers, lambda);
             return new CudaResult<int[]>(error, result);
         }
+
+        #region IDisposable Support
+        private bool disposedValue = false; // To detect redundant calls
+
+        void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    // TODO: dispose managed state (managed objects).
+                }
+
+                // TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
+                // TODO: set large fields to null.
+                if (PtrToUnmanagedClass != IntPtr.Zero)
+                {
+                    SafeNativeMethods.DisposeRandomClass(PtrToUnmanagedClass);
+                    PtrToUnmanagedClass = IntPtr.Zero;
+                }
+
+                disposedValue = true;
+            }
+        }
+
+        // TODO: override a finalizer only if Dispose(bool disposing) above has code to free unmanaged resources.
+        ~CuRand()
+        {
+            // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+            Dispose(false);
+        }
+
+        // This code added to correctly implement the disposable pattern.
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+            Dispose(true);
+            // TODO: uncomment the following line if the finalizer is overridden above.
+            GC.SuppressFinalize(this);
+        }
+        #endregion
     }
 }

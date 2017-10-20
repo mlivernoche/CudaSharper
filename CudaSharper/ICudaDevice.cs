@@ -11,11 +11,14 @@
  * - CuRand: cuRAND functions; allows the generation of pseudorandom number sets using uniform, normal, or poisson distributions.
  */
 
+using System;
+
 namespace CudaSharper
 {
-    internal interface ICudaDevice
+    public interface ICudaDevice
     {
         string GetCudaDeviceName();
         int DeviceId { get; }
+        long AllocationSize { get; }
     }
 }

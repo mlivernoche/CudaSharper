@@ -18,9 +18,10 @@ namespace CudaSharper
         CONJUGATE = 2
     }
 
-    public class CuArray : ICudaDevice
+    public sealed class CuArray : IDisposable
     {
         private ICudaDevice CudaDeviceComponent { get; }
+        private IntPtr PtrToUnmanagedClass { get; set; }
 
         public int DeviceId => CudaDeviceComponent.DeviceId;
 
@@ -29,19 +30,10 @@ namespace CudaSharper
             CudaSettings.Load();
         }
 
-        public CuArray(int device_id)
-        {
-            CudaDeviceComponent = new CudaDevice(device_id);
-        }
-
         public CuArray(CudaDevice device)
         {
-            CudaDeviceComponent = device;
-        }
-
-        public string GetCudaDeviceName()
-        {
-            return CudaDeviceComponent.GetCudaDeviceName();
+            CudaDeviceComponent = new CudaDevice(device.DeviceId, device.AllocationSize);
+            PtrToUnmanagedClass = SafeNativeMethods.CreateArrayClass(CudaDeviceComponent.DeviceId, CudaDeviceComponent.AllocationSize);
         }
 
         public ICudaResult<int[]> Add(int[] array1, int[] array2)
@@ -50,7 +42,7 @@ namespace CudaSharper
                 throw new ArgumentOutOfRangeException("Bad arrays given; they need to be the same length.");
 
             var result = new int[array1.Length];
-            var error = SafeNativeMethods.AddIntArrays(DeviceId, result, array1, array2, array1.Length);
+            var error = SafeNativeMethods.AddIntArrays(PtrToUnmanagedClass, result, array1, array2, array1.Length);
             return new CudaResult<int[]>(error, result);
         }
 
@@ -60,7 +52,7 @@ namespace CudaSharper
                 throw new ArgumentOutOfRangeException("Bad arrays given; they need to be the same length.");
 
             var result = new float[array1.Length];
-            var error = SafeNativeMethods.AddFloatArrays(DeviceId, result, array1, array2, array1.Length);
+            var error = SafeNativeMethods.AddFloatArrays(PtrToUnmanagedClass, result, array1, array2, array1.Length);
             return new CudaResult<float[]>(error, result);
         }
 
@@ -70,7 +62,7 @@ namespace CudaSharper
                 throw new ArgumentOutOfRangeException("Bad arrays given; they need to be the same length.");
 
             var result = new long[array1.Length];
-            var error = SafeNativeMethods.AddLongArrays(DeviceId, result, array1, array2, array1.Length);
+            var error = SafeNativeMethods.AddLongArrays(PtrToUnmanagedClass, result, array1, array2, array1.Length);
             return new CudaResult<long[]>(error, result);
         }
 
@@ -80,7 +72,7 @@ namespace CudaSharper
                 throw new ArgumentOutOfRangeException("Bad arrays given; they need to be the same length.");
 
             var result = new double[array1.Length];
-            var error = SafeNativeMethods.AddDoubleArrays(DeviceId, result, array1, array2, array1.Length);
+            var error = SafeNativeMethods.AddDoubleArrays(PtrToUnmanagedClass, result, array1, array2, array1.Length);
             return new CudaResult<double[]>(error, result);
         }
 
@@ -90,7 +82,7 @@ namespace CudaSharper
                 throw new ArgumentOutOfRangeException("Bad arrays given; they need to be the same length.");
 
             var result = new int[array1.Length];
-            var error = SafeNativeMethods.SubtractIntArrays(DeviceId, result, array1, array2, array1.Length);
+            var error = SafeNativeMethods.SubtractIntArrays(PtrToUnmanagedClass, result, array1, array2, array1.Length);
             return new CudaResult<int[]>(error, result);
         }
 
@@ -100,7 +92,7 @@ namespace CudaSharper
                 throw new ArgumentOutOfRangeException("Bad arrays given; they need to be the same length.");
 
             var result = new float[array1.Length];
-            var error = SafeNativeMethods.SubtractFloatArrays(DeviceId, result, array1, array2, array1.Length);
+            var error = SafeNativeMethods.SubtractFloatArrays(PtrToUnmanagedClass, result, array1, array2, array1.Length);
             return new CudaResult<float[]>(error, result);
         }
 
@@ -110,7 +102,7 @@ namespace CudaSharper
                 throw new ArgumentOutOfRangeException("Bad arrays given; they need to be the same length.");
 
             var result = new long[array1.Length];
-            var error = SafeNativeMethods.SubtractLongArrays(DeviceId, result, array1, array2, array1.Length);
+            var error = SafeNativeMethods.SubtractLongArrays(PtrToUnmanagedClass, result, array1, array2, array1.Length);
             return new CudaResult<long[]>(error, result);
         }
 
@@ -120,7 +112,7 @@ namespace CudaSharper
                 throw new ArgumentOutOfRangeException("Bad arrays given; they need to be the same length.");
 
             var result = new double[array1.Length];
-            var error = SafeNativeMethods.SubtractDoubleArrays(DeviceId, result, array1, array2, array1.Length);
+            var error = SafeNativeMethods.SubtractDoubleArrays(PtrToUnmanagedClass, result, array1, array2, array1.Length);
             return new CudaResult<double[]>(error, result);
         }
 
@@ -195,5 +187,46 @@ namespace CudaSharper
 
             return new CudaResult<double[][]>(result.Error, result.Result);
         }
+
+        #region IDisposable Support
+        private bool disposedValue = false; // To detect redundant calls
+
+        void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    // TODO: dispose managed state (managed objects).
+                }
+
+                // TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
+                // TODO: set large fields to null.
+                if (PtrToUnmanagedClass != IntPtr.Zero)
+                {
+                    SafeNativeMethods.DisposeArrayClass(PtrToUnmanagedClass);
+                    PtrToUnmanagedClass = IntPtr.Zero;
+                }
+
+                disposedValue = true;
+            }
+        }
+
+        // TODO: override a finalizer only if Dispose(bool disposing) above has code to free unmanaged resources.
+        ~CuArray()
+        {
+            // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+            Dispose(false);
+        }
+
+        // This code added to correctly implement the disposable pattern.
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+            Dispose(true);
+            // TODO: uncomment the following line if the finalizer is overridden above.
+            GC.SuppressFinalize(this);
+        }
+        #endregion
     }
 }

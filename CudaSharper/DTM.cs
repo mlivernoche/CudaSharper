@@ -85,11 +85,6 @@ namespace CudaSharper
         #endregion
 
         #region CudaSettings.cs
-        internal static CudaError InitializeCudaContext()
-        {
-            return CudaErrorCodes(SafeNativeMethods.InitializeCudaContext());
-        }
-        
         internal static CudaError GetCudaDeviceCount()
         {
             return CudaErrorCodes(SafeNativeMethods.GetCudaDeviceCount());

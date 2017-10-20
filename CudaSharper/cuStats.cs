@@ -7,9 +7,10 @@ using System.Threading.Tasks;
 
 namespace CudaSharper
 {
-    public class CuStats : ICudaDevice
+    public sealed class CuStats : IDisposable
     {
         private ICudaDevice CudaDeviceComponent { get; }
+        private IntPtr PtrToUnmanagedClass { get; set; }
 
         public int DeviceId => CudaDeviceComponent.DeviceId;
 
@@ -18,26 +19,17 @@ namespace CudaSharper
             CudaSettings.Load();
         }
 
-        public CuStats(int device_id)
-        {
-            CudaDeviceComponent = new CudaDevice(device_id);
-        }
-
         public CuStats(CudaDevice device)
         {
-            CudaDeviceComponent = device;
-        }
-
-        public string GetCudaDeviceName()
-        {
-            return CudaDeviceComponent.GetCudaDeviceName();
+            CudaDeviceComponent = new CudaDevice(device.DeviceId, device.AllocationSize);
+            PtrToUnmanagedClass = SafeNativeMethods.CreateStatClass(CudaDeviceComponent.DeviceId, CudaDeviceComponent.AllocationSize);
         }
         
         public ICudaResult<double> SampleStandardDeviation(float[] sample, float mean)
         {
             double result = 0;
             var error_code = SafeNativeMethods.SampleStandardDeviationFloat(
-                CudaDeviceComponent.DeviceId,
+                PtrToUnmanagedClass,
                 ref result,
                 sample, sample.LongLength, mean);
             return new CudaResult<double>(error_code, result);
@@ -52,7 +44,7 @@ namespace CudaSharper
         {
             double result = 0;
             var error_code = SafeNativeMethods.SampleStandardDeviationDouble(
-                CudaDeviceComponent.DeviceId,
+                PtrToUnmanagedClass,
                 ref result,
                 sample, sample.LongLength, mean);
             return new CudaResult<double>(error_code, result);
@@ -67,7 +59,7 @@ namespace CudaSharper
         {
             double result = 0;
             var error_code = SafeNativeMethods.StandardDeviationFloat(
-                CudaDeviceComponent.DeviceId,
+                PtrToUnmanagedClass,
                 ref result,
                 sample, sample.LongLength, mean);
             return new CudaResult<double>(error_code, result);
@@ -82,7 +74,7 @@ namespace CudaSharper
         {
             double result = 0;
             var error_code = SafeNativeMethods.StandardDeviationDouble(
-                CudaDeviceComponent.DeviceId,
+                PtrToUnmanagedClass,
                 ref result,
                 sample, sample.LongLength, mean);
             return new CudaResult<double>(error_code, result);
@@ -97,7 +89,7 @@ namespace CudaSharper
         {
             double result = 0;
             var error_code = SafeNativeMethods.SampleCovarianceFloat(
-                CudaDeviceComponent.DeviceId,
+                PtrToUnmanagedClass,
                 ref result,
                 x_array, x_mean,
                 y_array, y_mean,
@@ -114,7 +106,7 @@ namespace CudaSharper
         {
             double result = 0;
             var error_code = SafeNativeMethods.SampleCovarianceDouble(
-                CudaDeviceComponent.DeviceId,
+                PtrToUnmanagedClass,
                 ref result,
                 x_array, x_mean,
                 y_array, y_mean,
@@ -131,7 +123,7 @@ namespace CudaSharper
         {
             double result = 0;
             var error_code = SafeNativeMethods.CovarianceDouble(
-                CudaDeviceComponent.DeviceId,
+                PtrToUnmanagedClass,
                 ref result,
                 x_array, x_mean,
                 y_array, y_mean,
@@ -143,7 +135,7 @@ namespace CudaSharper
         {
             double result = 0;
             var error_code = SafeNativeMethods.CovarianceFloat(
-                CudaDeviceComponent.DeviceId,
+                PtrToUnmanagedClass,
                 ref result,
                 x_array, x_mean,
                 y_array, y_mean,
@@ -165,7 +157,7 @@ namespace CudaSharper
         {
             double result = 0;
             var error_code = SafeNativeMethods.PearsonCorrelationFloat(
-                CudaDeviceComponent.DeviceId,
+                PtrToUnmanagedClass,
                 ref result,
                 x_array, x_mean,
                 y_array, y_mean,
@@ -182,7 +174,7 @@ namespace CudaSharper
         {
             double result = 0;
             var error_code = SafeNativeMethods.PearsonCorrelationDouble(
-                CudaDeviceComponent.DeviceId,
+                PtrToUnmanagedClass,
                 ref result,
                 x_array, x_mean,
                 y_array, y_mean,
@@ -289,7 +281,7 @@ namespace CudaSharper
         /// <returns>The Value-at-Risk. No units involved.</returns>
         public double VaR(float[] invested_amounts, float[][] covariance_matrix, double confidence_level, int time_period)
         {
-            var cuArray = new CuArray(DeviceId);
+            var cuArray = new CuArray(new CudaDevice(CudaDeviceComponent.DeviceId, CudaDeviceComponent.AllocationSize));
 
             var invested_amounts_horizontal = new float[][] { invested_amounts };
             var covariance_times_beta_horizontal = cuArray.Multiply(
@@ -313,5 +305,46 @@ namespace CudaSharper
 
             return Math.Sqrt(covariance_times_beta_vertical.Result[0][0]) * confidence_level * Math.Sqrt(time_period);
         }
+
+        #region IDisposable Support
+        private bool disposedValue = false; // To detect redundant calls
+
+        void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    // TODO: dispose managed state (managed objects).
+                }
+
+                // TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
+                // TODO: set large fields to null.
+                if (PtrToUnmanagedClass != IntPtr.Zero)
+                {
+                    SafeNativeMethods.DisposeStatClass(PtrToUnmanagedClass);
+                    PtrToUnmanagedClass = IntPtr.Zero;
+                }
+
+                disposedValue = true;
+            }
+        }
+
+        // TODO: override a finalizer only if Dispose(bool disposing) above has code to free unmanaged resources.
+        ~CuStats()
+        {
+            // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+            Dispose(false);
+        }
+
+        // This code added to correctly implement the disposable pattern.
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+            Dispose(true);
+            // TODO: uncomment the following line if the finalizer is overridden above.
+            GC.SuppressFinalize(this);
+        }
+        #endregion
     }
 }
