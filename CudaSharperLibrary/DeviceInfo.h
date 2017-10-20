@@ -10,43 +10,21 @@ int32_t marshal_cuda_error(cudaError_t error);
 
 class DeviceInfo {
 public:
-	static cudaError_t get_cuda_device_count(int32_t& result);
-	static cudaError_t intialize_cuda_context();
-	static cudaError_t get_cuda_device_name(int32_t device_id, char* device_name_ptr);
-	static cudaError_t reset_cuda_device();
-
-	explicit DeviceInfo() {
-		int32_t num = 0;
-		DeviceInfo::get_cuda_device_count(num);
-		if (num > 0) {
-			DeviceInfo::is_device_prop_initialized = (std::atomic<bool>*)malloc(sizeof(std::atomic<bool>) * num);
-			DeviceInfo::properties = (cudaDeviceProp*)malloc(sizeof(cudaDeviceProp) * num);
-		}
-
-		DeviceInfo::intialize_cuda_context();
-	}
-
-	static cudaError_t get_device_properties(int32_t device_id, cudaDeviceProp *prop) {
-		if (DeviceInfo::is_device_prop_initialized[device_id].load() != true) {
-			cudaError_t errorCode = cudaGetDeviceProperties(&DeviceInfo::properties[device_id], device_id);
-			if (errorCode != cudaSuccess) return errorCode;
-			DeviceInfo::is_device_prop_initialized[device_id].store(true);
-		}
-
-		*prop = DeviceInfo::properties[device_id];
-
-		return cudaSuccess;
-	}
-
-	static cudaDeviceProp* properties;
-
+	DeviceInfo(int32_t device_id = 0);
+	cudaError_t get_device_properties(int32_t device_id, cudaDeviceProp* prop) const;
+	int32_t get_cuda_device_count() const;
+	cudaError_t get_cuda_device_count(int32_t& result) const;
+	cudaError_t get_cuda_device_name(int32_t device_id, char* device_name_ptr) const;
+	cudaError_t reset_cuda_device() const;
+	int32_t get_device_id() const;
 private:
-	static std::atomic<bool> is_context_initialized;
+	static cudaDeviceProp* properties;
+	static std::atomic<bool>* is_context_initialized;
 	static std::atomic<bool>* is_device_prop_initialized;
+	int32_t device_id;
 };
 
 extern "C" {
-	__declspec(dllexport) int32_t InitializeCudaContext();
 	__declspec(dllexport) int32_t GetCudaDeviceCount();
 	__declspec(dllexport) int32_t GetCudaDeviceName(int32_t device_id, char* device_name_ptr);
 	__declspec(dllexport) int32_t ResetCudaDevice();
