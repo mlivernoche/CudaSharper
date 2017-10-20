@@ -97,35 +97,17 @@ The functions that generate double (e.g., curand_normal2) and quadruple (e.g., c
 | Pearson Correlation Matrix | CorrelationMatrix |
 | Value-at-Risk | VaR |
 
-## Examples
-
-### Example \#1: Merging two arrays
-
-```
-// Load the DLL. It only has to be called once.
-CudaSettings.Load();
-
-// We'll use the second CUDA-enabled GPU (this system has a GTX 1070 [which is 0] and a GTX 1050 Ti [which is 1]).
-var cudaObject = new Cuda(1);
-
-var array1 = Enumerable.Range(0, 10_000);
-var array2 = Enumerable.Range(0, 10_000);
-
-// This takes arrays, but it returns IEnumerable<T> (see below for supported types).
-var merged_array = cudaObject.MergeArrays(array1.ToArray(), array2.ToArray());
-```
-
-### Example \#2: Generating random numbers
+## Example
 
 ```
 // Load the DLL. It only has to be called once.
 CudaSettings.Load();
 
 // We'll use the first CUDA-enabled GPU (this system has a GTX 1070 [which is 0] and a GTX 1050 Ti [which is 1]).
-var cudaObject = new CuRand(0);
-
-// Generate 100,000 random numbers using a uniform distribution. The return value is IEnumerable<float>.
-var uniform_rand = cuRand.GenerateUniformDistribution(100_000);
+using(var cudaObject = new CuRand(new CudaDevice(0, 100_000))){
+    // Generate 100,000 random numbers using a uniform distribution. The return value is IEnumerable<float>.
+    var uniform_rand = cudaObject.GenerateUniformDistribution(100_000);
+}
 ```
 
 ## Reference
