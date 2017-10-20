@@ -133,6 +133,8 @@ using(var cudaObject = new CuRand(new CudaDevice(0, 100_000))){
 ## Changelog
 10/20/2017 - added persistent device pointers, i.e. cuda_device_ptr and cuda_device. These allow classes (like cuda_rand) to allocate once, rather than allocating each function call. This memory is automatically freed upon the end of the object's lifecycle.
 
+10/14/2017 - released Rich. Each function now returns a cudaError_t, which can help with determining CUDA failures. In the C# wrapper, each method returns ICudaResult<T>, which contains the error code and the result.
+
 09/27/2017 - released Jay. Mostly performance improvements and naming improvements.
 
 09/22/2017 - added cuStats. Released Mike.
