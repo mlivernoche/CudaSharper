@@ -58,26 +58,13 @@ cudaError_t cuStats::standard_deviation_summation<T>(
 	int32_t threads = CUSTATS_NUM_OF_THREADS;
 	this->determine_launch_parameters(&blocks, &threads, sample_size, this->max_blocks, this->max_threads);
 
-	// cudaHostAlloc() allows faster copying from DtoH, but it is much slower than malloc().
-	// The benefit does not outweigh the cost.
-	T *h_result = (T*)malloc(data_size_in_memory);
-
 	errorCode = cudaMemcpy(sample_ptr, sample, data_size_in_memory, cudaMemcpyHostToDevice);
 	if (errorCode != cudaSuccess) return errorCode;
 
-	//size_t shared_memory = sizeof(T) * 4 * threads;
-	cuStats_standard_deviation_kernel << <blocks, threads, 0 >> > (result_ptr, sample_ptr, sample_size, mean);
+	cuStats_standard_deviation_kernel << <blocks, threads >> > (result_ptr, sample_ptr, sample_size, mean);
 
-	errorCode = cudaMemcpy(h_result, result_ptr, data_size_in_memory, cudaMemcpyDeviceToHost);
-	if (errorCode != cudaSuccess) return errorCode;
-
-	double sum_std = 0;
-	for (int64_t j = 0; j < sample_size; j++) {
-		sum_std += (double)h_result[j];
-	}
-
-	free(h_result);
-	result = sum_std;
+	thrust::device_ptr<T> wrapped_ptr = thrust::device_pointer_cast(result_ptr);
+	result = (double)thrust::reduce(thrust::device, wrapped_ptr, wrapped_ptr + sample_size, (T)0, thrust::plus<T>());
 
 	return cudaSuccess;
 }
@@ -150,10 +137,6 @@ template<typename T> cudaError_t cuStats::covariance_summation<T>(
 	int32_t threads = CUSTATS_NUM_OF_THREADS;
 	this->determine_launch_parameters(&blocks, &threads, array_size, this->max_blocks, this->max_threads);
 
-	// cudaHostAlloc() allows faster copying from DtoH, but it is much slower than malloc().
-	// The benefit does not outweigh the cost.
-	T* h_result = (T*)malloc(data_size_in_memory);
-
 	errorCode = cudaMemcpy(x_ptr, x_array, data_size_in_memory, cudaMemcpyHostToDevice);
 	if (errorCode != cudaSuccess) return errorCode;
 	errorCode = cudaMemcpy(y_ptr, y_array, data_size_in_memory, cudaMemcpyHostToDevice);
@@ -161,16 +144,8 @@ template<typename T> cudaError_t cuStats::covariance_summation<T>(
 
 	cuStats_covariance_kernel << <blocks, threads, 0 >> > (result_ptr, x_ptr, x_mean, y_ptr, y_mean, array_size);
 
-	errorCode = cudaMemcpyAsync(h_result, result_ptr, data_size_in_memory, cudaMemcpyDeviceToHost);
-	if (errorCode != cudaSuccess) return errorCode;
-
-	double sum = 0;
-	for (int64_t j = 0; j < array_size; j++) {
-		sum += (double)h_result[j];
-	}
-
-	free(h_result);
-	result = sum;
+	thrust::device_ptr<T> wrapped_ptr = thrust::device_pointer_cast(result_ptr);
+	result = (double)thrust::reduce(thrust::device, wrapped_ptr, wrapped_ptr + array_size, (T)0, thrust::plus<T>());
 
 	return cudaSuccess;
 }

@@ -4,6 +4,8 @@
 #include "device_launch_parameters.h"
 #include "cuda_profiler_api.h"
 #include "device_functions.h"
+#include "thrust\reduce.h"
+#include "thrust\execution_policy.h"
 #include <atomic>
 #include <math.h>
 
