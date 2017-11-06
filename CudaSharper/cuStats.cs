@@ -1,9 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CudaSharper
 {
@@ -19,12 +15,12 @@ namespace CudaSharper
             CudaSettings.Load();
         }
 
-        public CuStats(CudaDevice device)
+        public CuStats(ICudaDevice device)
         {
             CudaDeviceComponent = new CudaDevice(device.DeviceId, device.AllocationSize);
             PtrToUnmanagedClass = SafeNativeMethods.CreateStatClass(CudaDeviceComponent.DeviceId, CudaDeviceComponent.AllocationSize);
         }
-        
+
         public ICudaResult<double> SampleStandardDeviation(float[] sample, float mean)
         {
             double result = 0;
@@ -57,6 +53,8 @@ namespace CudaSharper
 
         public ICudaResult<double> StandardDeviation(float[] sample, float mean)
         {
+            if (sample.LongLength > CudaDeviceComponent.AllocationSize) throw new ArgumentOutOfRangeException("Array bigger than allocation size.");
+
             double result = 0;
             var error_code = SafeNativeMethods.StandardDeviationFloat(
                 PtrToUnmanagedClass,
@@ -72,6 +70,8 @@ namespace CudaSharper
 
         public ICudaResult<double> StandardDeviation(double[] sample, double mean)
         {
+            if (sample.LongLength > CudaDeviceComponent.AllocationSize) throw new ArgumentOutOfRangeException("Array bigger than allocation size.");
+
             double result = 0;
             var error_code = SafeNativeMethods.StandardDeviationDouble(
                 PtrToUnmanagedClass,
@@ -83,6 +83,54 @@ namespace CudaSharper
         public ICudaResult<double> StandardDeviation(double[] sample)
         {
             return StandardDeviation(sample, sample.Average());
+        }
+
+        public ICudaResult<double> Variance(float[] array, float mean)
+        {
+            var std = StandardDeviation(array, mean);
+            return new CudaResult<double>(std.Error, Math.Pow(std.Result, 2));
+        }
+
+        public ICudaResult<double> Variance(float[] array)
+        {
+            var std = StandardDeviation(array, array.Average());
+            return new CudaResult<double>(std.Error, Math.Pow(std.Result, 2));
+        }
+
+        public ICudaResult<double> Variance(double[] array, double mean)
+        {
+            var std = StandardDeviation(array, mean);
+            return new CudaResult<double>(std.Error, Math.Pow(std.Result, 2));
+        }
+
+        public ICudaResult<double> Variance(double[] array)
+        {
+            var std = StandardDeviation(array, array.Average());
+            return new CudaResult<double>(std.Error, Math.Pow(std.Result, 2));
+        }
+
+        public ICudaResult<double> SampleVariance(float[] array, float mean)
+        {
+            var std = SampleStandardDeviation(array, mean);
+            return new CudaResult<double>(std.Error, Math.Pow(std.Result, 2));
+        }
+
+        public ICudaResult<double> SampleVariance(float[] array)
+        {
+            var std = SampleStandardDeviation(array, array.Average());
+            return new CudaResult<double>(std.Error, Math.Pow(std.Result, 2));
+        }
+
+        public ICudaResult<double> SampleVariance(double[] array, double mean)
+        {
+            var std = SampleStandardDeviation(array, mean);
+            return new CudaResult<double>(std.Error, Math.Pow(std.Result, 2));
+        }
+
+        public ICudaResult<double> SampleVariance(double[] array)
+        {
+            var std = SampleStandardDeviation(array, array.Average());
+            return new CudaResult<double>(std.Error, Math.Pow(std.Result, 2));
         }
 
         public ICudaResult<double> SampleCovariance(float[] x_array, float x_mean, float[] y_array, float y_mean)
@@ -187,27 +235,87 @@ namespace CudaSharper
             return Correlation(x_array, x_array.Average(), y_array, y_array.Average());
         }
 
-        public ICudaResult<float[][]> CorrelationMatrix(float[][] sets_of_scalars)
+        public ICudaResult<double> Autocorrelation(float[] x_array, float x_mean, float[] y_array, float y_mean, int lag)
+        {
+            if (lag < 0) throw new ArgumentOutOfRangeException($"Lag cannot be less than 0. Given: {lag}");
+
+            var errorCode = CudaError.Success;
+
+            var length = x_array.LongLength - lag;
+            var array1 = new double[length];
+            var array2 = new double[length];
+            Array.Copy(x_array, 0, array1, 0, length);
+            Array.Copy(y_array, lag, array2, 0, length);
+
+            if (array1.Length != array2.Length) throw new AccessViolationException($"Array size mismatch: {array1.Length} vs {array2.Length}");
+            if (array1.Length > CudaDeviceComponent.AllocationSize) throw new ArgumentOutOfRangeException($"Array bigger than allocation size: {array1.Length} vs {CudaDeviceComponent.AllocationSize}");
+
+            var std = Variance(x_array, x_mean);
+            if (std.Error != CudaError.Success) errorCode = std.Error;
+            
+            var cov = Covariance(array1, x_mean, array2, y_mean);
+            if (cov.Error != CudaError.Success) errorCode = cov.Error;
+
+            return new CudaResult<double>(errorCode, cov.Result / std.Result);
+        }
+
+        public ICudaResult<double> Autocorrelation(float[] x_array, float[] y_array, int lag)
+        {
+            return Autocorrelation(x_array, x_array.Average(), y_array, y_array.Average(), lag);
+        }
+
+        public ICudaResult<double> Autocorrelation(double[] x_array, double x_mean, double[] y_array, double y_mean, int lag)
+        {
+            if (lag < 0) throw new ArgumentOutOfRangeException($"Lag cannot be less than 0. Given: {lag}");
+
+            var errorCode = CudaError.Success;
+            
+            var length = x_array.LongLength - lag;
+            var array1 = new double[length];
+            var array2 = new double[length];
+            Array.Copy(x_array, 0, array1, 0, length);
+            Array.Copy(y_array, lag, array2, 0, length);
+
+            if (array1.Length != array2.Length) throw new AccessViolationException($"Array size mismatch: {array1.Length} vs {array2.Length}");
+            if (array1.Length > CudaDeviceComponent.AllocationSize) throw new ArgumentOutOfRangeException($"Array bigger than allocation size: {array1.Length} vs {CudaDeviceComponent.AllocationSize}");
+
+            var std = Variance(x_array, x_mean);
+            if (std.Error != CudaError.Success) errorCode = std.Error;
+            
+            var cov = Covariance(array1, x_mean, array2, y_mean);
+            if (cov.Error != CudaError.Success) errorCode = cov.Error;
+
+            return new CudaResult<double>(errorCode, cov.Result / std.Result);
+        }
+
+        public ICudaResult<double> Autocorrelation(double[] x_array, double[] y_array, int lag)
+        {
+            return Autocorrelation(x_array, x_array.Average(), y_array, y_array.Average(), lag);
+        }
+
+        public ICudaResult<double[][]> CorrelationMatrix(float[][] sets_of_scalars)
         {
             var set_length = sets_of_scalars.LongLength;
-            var C = new float[set_length][];
+            var C = new double[set_length][];
             var error_code = CudaError.Success;
 
             for (long i = 0; i < set_length; i++)
             {
-                C[i] = new float[set_length];
+                C[i] = new double[set_length];
 
                 for (long j = 0; j < set_length; j++)
                 {
-                    var cov = Correlation(sets_of_scalars[i], sets_of_scalars[j]);
-                    error_code = cov.Error;
-                    C[i][j] = (float)cov.Result;
+                    // Correlation(x, y) will always return a double, but it will use FP32 if given
+                    // floats or FP64 given doubles.
+                    var corr = Correlation(sets_of_scalars[i], sets_of_scalars[j]);
+                    error_code = corr.Error != CudaError.Success ? corr.Error : CudaError.Success;
+                    C[i][j] = corr.Result;
                 }
             }
 
-            return new CudaResult<float[][]>(error_code, C);
+            return new CudaResult<double[][]>(error_code, C);
         }
-        
+
         public ICudaResult<double[][]> CorrelationMatrix(double[][] sets_of_scalars)
         {
             var set_length = sets_of_scalars.LongLength;
@@ -220,34 +328,34 @@ namespace CudaSharper
 
                 for (long j = 0; j < set_length; j++)
                 {
-                    var cov = Correlation(sets_of_scalars[i], sets_of_scalars[j]);
-                    error_code = cov.Error;
-                    C[i][j] = cov.Result;
+                    var corr = Correlation(sets_of_scalars[i], sets_of_scalars[j]);
+                    error_code = corr.Error != CudaError.Success ? corr.Error : CudaError.Success;
+                    C[i][j] = corr.Result;
                 }
             }
 
             return new CudaResult<double[][]>(error_code, C);
         }
 
-        public ICudaResult<float[][]> CovarianceMatrix(float[][] sets_of_scalars)
+        public ICudaResult<double[][]> CovarianceMatrix(float[][] sets_of_scalars)
         {
             var set_length = sets_of_scalars.LongLength;
-            var C = new float[set_length][];
+            var C = new double[set_length][];
             var error_code = CudaError.Success;
 
             for (long i = 0; i < set_length; i++)
             {
-                C[i] = new float[set_length];
+                C[i] = new double[set_length];
 
                 for (long j = 0; j < set_length; j++)
                 {
                     var cov = Covariance(sets_of_scalars[i], sets_of_scalars[j]);
-                    error_code = cov.Error;
-                    C[i][j] = (float)cov.Result;
+                    error_code = cov.Error != CudaError.Success ? cov.Error : CudaError.Success;
+                    C[i][j] = cov.Result;
                 }
             }
 
-            return new CudaResult<float[][]>(error_code, C);
+            return new CudaResult<double[][]>(error_code, C);
         }
 
         public ICudaResult<double[][]> CovarianceMatrix(double[][] sets_of_scalars)
@@ -263,7 +371,7 @@ namespace CudaSharper
                 for (long j = 0; j < set_length; j++)
                 {
                     var cov = Covariance(sets_of_scalars[i], sets_of_scalars[j]);
-                    error_code = cov.Error;
+                    error_code = cov.Error != CudaError.Success ? cov.Error : CudaError.Success;
                     C[i][j] = cov.Result;
                 }
             }
@@ -281,29 +389,30 @@ namespace CudaSharper
         /// <returns>The Value-at-Risk. No units involved.</returns>
         public double VaR(float[] invested_amounts, float[][] covariance_matrix, double confidence_level, int time_period)
         {
-            var cuArray = new CuArray(new CudaDevice(CudaDeviceComponent.DeviceId, CudaDeviceComponent.AllocationSize));
-
-            var invested_amounts_horizontal = new float[][] { invested_amounts };
-            var covariance_times_beta_horizontal = cuArray.Multiply(
-                CUBLAS_OP.DO_NOT_TRANSPOSE, CUBLAS_OP.DO_NOT_TRANSPOSE,
-                1,
-                invested_amounts_horizontal,
-                covariance_matrix,
-                0);
-
-            var covariance_times_beta_vertical = cuArray.Multiply(
-                CUBLAS_OP.TRANSPOSE, CUBLAS_OP.DO_NOT_TRANSPOSE,
-                1,
-                covariance_times_beta_horizontal.Result,
-                invested_amounts_horizontal,
-                0);
-
-            if(covariance_times_beta_vertical.Result.Length > 1 || covariance_times_beta_vertical.Result[0].Length > 1)
+            using (var cuArray = new CuArray(new CudaDevice(CudaDeviceComponent.DeviceId, CudaDeviceComponent.AllocationSize)))
             {
-                throw new ArgumentOutOfRangeException("The matrix given for Beta * CovMatrix * Beta^T was bigger than one.");
-            }
+                var invested_amounts_horizontal = new float[][] { invested_amounts };
+                var covariance_times_beta_horizontal = cuArray.Multiply(
+                    CUBLAS_OP.DO_NOT_TRANSPOSE, CUBLAS_OP.DO_NOT_TRANSPOSE,
+                    1,
+                    invested_amounts_horizontal,
+                    covariance_matrix,
+                    0);
 
-            return Math.Sqrt(covariance_times_beta_vertical.Result[0][0]) * confidence_level * Math.Sqrt(time_period);
+                var covariance_times_beta_vertical = cuArray.Multiply(
+                    CUBLAS_OP.TRANSPOSE, CUBLAS_OP.DO_NOT_TRANSPOSE,
+                    1,
+                    covariance_times_beta_horizontal.Result,
+                    invested_amounts_horizontal,
+                    0);
+
+                if (covariance_times_beta_vertical.Result.Length > 1 || covariance_times_beta_vertical.Result[0].Length > 1)
+                {
+                    throw new ArgumentOutOfRangeException("The matrix given for Beta * CovMatrix * Beta^T was bigger than one.");
+                }
+
+                return Math.Sqrt(covariance_times_beta_vertical.Result[0][0]) * confidence_level * Math.Sqrt(time_period);
+            }
         }
 
         #region IDisposable Support
