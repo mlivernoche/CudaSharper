@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 
 /*
@@ -112,6 +110,7 @@ namespace CudaSharper
             var d_a = FlattenArray(a.Length, a[0].Length, a);
             var d_b = FlattenArray(b.Length, b[0].Length, b);
 
+            // C(m,n) = A(m,k) * B(k,n)
             // Despite the definition above, this will return the correct size for C. Go figure.
             var d_c = new float[a.Length * b.Length];
 
@@ -147,6 +146,7 @@ namespace CudaSharper
             var d_a = FlattenArray(a.Length, a[0].Length, a);
             var d_b = FlattenArray(b.Length, b[0].Length, b);
 
+            // C(m,n) = A(m,k) * B(k,n)
             // Despite the definition above, this will return the correct size for C. Go figure.
             var d_c = new double[a.Length * b.Length];
 

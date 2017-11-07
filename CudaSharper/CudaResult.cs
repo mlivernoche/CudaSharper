@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
-namespace CudaSharper
+﻿namespace CudaSharper
 {
-    public struct CudaResult<T> : ICudaResult<T>
+    public class CudaResult<T> : ICudaResult<T>
     {
         public CudaError Error { get; }
         public T Result { get; }

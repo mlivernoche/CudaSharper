@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 
 /*
  * CudaSharper - a wrapper for CUDA-accelerated functions. CudaSharper is not intended to write CUDA in C#, but rather a
@@ -30,7 +29,7 @@ namespace CudaSharper
             CudaSettings.Load();
         }
 
-        public CuArray(CudaDevice device)
+        public CuArray(ICudaDevice device)
         {
             CudaDeviceComponent = new CudaDevice(device.DeviceId, device.AllocationSize);
             PtrToUnmanagedClass = SafeNativeMethods.CreateArrayClass(CudaDeviceComponent.DeviceId, CudaDeviceComponent.AllocationSize);

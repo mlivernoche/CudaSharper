@@ -11,12 +11,12 @@
  * - CuRand: cuRAND functions; allows the generation of pseudorandom number sets using uniform, normal, or poisson distributions.
  */
 
-using System;
-
 namespace CudaSharper
 {
     public interface ICudaDevice
     {
+        // This property is for WPF.
+        string DeviceName { get; }
         string GetCudaDeviceName();
         int DeviceId { get; }
         long AllocationSize { get; }

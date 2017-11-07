@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
 /*
  * CudaSharper - a wrapper for CUDA-accelerated functions. CudaSharper is not intended to write CUDA in C#, but rather a
@@ -23,16 +21,23 @@ namespace CudaSharper
         private IntPtr PtrToUnmanagedClass { get; set; }
 
         public int DeviceId => CudaDeviceComponent.DeviceId;
+        public long Max => CudaDeviceComponent.AllocationSize;
 
         static CuRand()
         {
             CudaSettings.Load();
         }
 
-        public CuRand(CudaDevice device)
+        public CuRand(ICudaDevice device)
         {
             CudaDeviceComponent = new CudaDevice(device.DeviceId, device.AllocationSize);
             PtrToUnmanagedClass = SafeNativeMethods.CreateRandomClass(CudaDeviceComponent.DeviceId, CudaDeviceComponent.AllocationSize);
+        }
+        
+        public ICudaResult<float[]> GenerateUniformDistribution(long amount_of_numbers, float[] result)
+        {
+            var error = SafeNativeMethods.UniformRand(PtrToUnmanagedClass, result, amount_of_numbers);
+            return new CudaResult<float[]>(error, result);
         }
 
         /// <summary>
@@ -41,11 +46,16 @@ namespace CudaSharper
         /// </summary>
         /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
         /// <returns>An IEnumerable holding the random numbers (in memory for the CPU to use).</returns>
-        public ICudaResult<float[]> GenerateUniformDistribution(int amount_of_numbers)
+        public ICudaResult<float[]> GenerateUniformDistribution(long amount_of_numbers)
         {
             var result = new float[amount_of_numbers];
-            var error = SafeNativeMethods.UniformRand(PtrToUnmanagedClass, result, amount_of_numbers);
-            return new CudaResult<float[]>(error, result);
+            return GenerateUniformDistribution(amount_of_numbers, result);
+        }
+        
+        public ICudaResult<double[]> GenerateUniformDistributionDP(long amount_of_numbers, double[] result)
+        {
+            var error = SafeNativeMethods.UniformRandDouble(PtrToUnmanagedClass, result, amount_of_numbers);
+            return new CudaResult<double[]>(error, result);
         }
 
         /// <summary>
@@ -55,11 +65,16 @@ namespace CudaSharper
         /// </summary>
         /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
         /// <returns>An IEnumerable holding the random numbers (in memory for the CPU to use).</returns>
-        public ICudaResult<double[]> GenerateUniformDistributionDP(int amount_of_numbers)
+        public ICudaResult<double[]> GenerateUniformDistributionDP(long amount_of_numbers)
         {
             var result = new double[amount_of_numbers];
-            var error = SafeNativeMethods.UniformRandDouble(PtrToUnmanagedClass, result, amount_of_numbers);
-            return new CudaResult<double[]>(error, result);
+            return GenerateUniformDistributionDP(amount_of_numbers, result);
+        }
+
+        public ICudaResult<float[]> GenerateLogNormalDistribution(long amount_of_numbers, float[] result, float mean, float stddev)
+        {
+            var error = SafeNativeMethods.LogNormalRand(PtrToUnmanagedClass, result, amount_of_numbers, mean, stddev);
+            return new CudaResult<float[]>(error, result);
         }
 
         /// <summary>
@@ -68,11 +83,16 @@ namespace CudaSharper
         /// </summary>
         /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
         /// <returns>An IEnumerable holding the random numbers (in memory for the CPU to use).</returns>
-        public ICudaResult<float[]> GenerateLogNormalDistribution(int amount_of_numbers, float mean, float stddev)
+        public ICudaResult<float[]> GenerateLogNormalDistribution(long amount_of_numbers, float mean, float stddev)
         {
             var result = new float[amount_of_numbers];
-            var error = SafeNativeMethods.LogNormalRand(PtrToUnmanagedClass, result, amount_of_numbers, mean, stddev);
-            return new CudaResult<float[]>(error, result);
+            return GenerateLogNormalDistribution(amount_of_numbers, result, mean, stddev);
+        }
+
+        public ICudaResult<double[]> GenerateLogNormalDistributionDP(long amount_of_numbers, double[] result, float mean, float stddev)
+        {
+            var error = SafeNativeMethods.LogNormalRandDouble(PtrToUnmanagedClass, result, amount_of_numbers, mean, stddev);
+            return new CudaResult<double[]>(error, result);
         }
 
         /// <summary>
@@ -84,11 +104,16 @@ namespace CudaSharper
         /// <param name="mean">The mean (average) of the distribution.</param>
         /// <param name="stddev">The standard deviation of the distribution.</param>
         /// <returns>An IEnumerable holding the random numbers (in memory for the CPU to use).</returns>
-        public ICudaResult<double[]> GenerateLogNormalDistributionDP(int amount_of_numbers, float mean, float stddev)
+        public ICudaResult<double[]> GenerateLogNormalDistributionDP(long amount_of_numbers, float mean, float stddev)
         {
             var result = new double[amount_of_numbers];
-            var error = SafeNativeMethods.LogNormalRandDouble(PtrToUnmanagedClass, result, amount_of_numbers, mean, stddev);
-            return new CudaResult<double[]>(error, result);
+            return GenerateLogNormalDistributionDP(amount_of_numbers, result, mean, stddev);
+        }
+
+        public ICudaResult<float[]> GenerateNormalDistribution(long amount_of_numbers, float[] result)
+        {
+            var error = SafeNativeMethods.NormalRand(PtrToUnmanagedClass, result, amount_of_numbers);
+            return new CudaResult<float[]>(error, result);
         }
 
         /// <summary>
@@ -97,11 +122,16 @@ namespace CudaSharper
         /// </summary>
         /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
         /// <returns>An IEnumerable holding the random numbers (in memory for the CPU to use).</returns>
-        public ICudaResult<float[]> GenerateNormalDistribution(int amount_of_numbers)
+        public ICudaResult<float[]> GenerateNormalDistribution(long amount_of_numbers)
         {
             var result = new float[amount_of_numbers];
-            var error = SafeNativeMethods.NormalRand(PtrToUnmanagedClass, result, amount_of_numbers);
-            return new CudaResult<float[]>(error, result);
+            return GenerateNormalDistribution(amount_of_numbers, result);
+        }
+
+        public ICudaResult<double[]> GenerateNormalDistributionDP(long amount_of_numbers, double[] result)
+        {
+            var error = SafeNativeMethods.NormalRandDouble(PtrToUnmanagedClass, result, amount_of_numbers);
+            return new CudaResult<double[]>(error, result);
         }
 
         /// <summary>
@@ -111,18 +141,22 @@ namespace CudaSharper
         /// </summary>
         /// <param name="amount_of_numbers">The amount of random numbers to generate.</param>
         /// <returns>An IEnumerable holding the random numbers (in memory for the CPU to use).</returns>
-        public ICudaResult<double[]> GenerateNormalDistributionDP(int amount_of_numbers)
+        public ICudaResult<double[]> GenerateNormalDistributionDP(long amount_of_numbers)
         {
             var result = new double[amount_of_numbers];
-            var error = SafeNativeMethods.NormalRandDouble(PtrToUnmanagedClass, result, amount_of_numbers);
-            return new CudaResult<double[]>(error, result);
+            return GenerateNormalDistributionDP(amount_of_numbers, result);
         }
 
-        public ICudaResult<int[]> GeneratePoissonDistribution(int amount_of_numbers, double lambda)
+        public ICudaResult<int[]> GeneratePoissonDistribution(long amount_of_numbers, int[] result, double lambda)
         {
-            var result = new int[amount_of_numbers];
             var error = SafeNativeMethods.PoissonRand(PtrToUnmanagedClass, result, amount_of_numbers, lambda);
             return new CudaResult<int[]>(error, result);
+        }
+
+        public ICudaResult<int[]> GeneratePoissonDistribution(long amount_of_numbers, double lambda)
+        {
+            var result = new int[amount_of_numbers];
+            return GeneratePoissonDistribution(amount_of_numbers, result, lambda);
         }
 
         #region IDisposable Support
