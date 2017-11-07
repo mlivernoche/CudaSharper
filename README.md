@@ -90,11 +90,14 @@ The functions that generate double (e.g., curand_normal2) and quadruple (e.g., c
 | ------------------ | ------------------ |
 | Sample Standard Deviation | SampleStandardDeviation |
 | Standard Deviation | StandardDeviation |
+| Variance | Variance |
+| Sample Variance | SampleVariance |
 | Sample Covariance | SampleCovariance |
 | Covariance | Covariance |
 | Covariance Matrix | CovarianceMatrix |
 | Pearson Correlation | Correlation |
 | Pearson Correlation Matrix | CorrelationMatrix |
+| Autocorrelation | Autocorrelation |
 | Value-at-Risk | VaR |
 
 ## Example
